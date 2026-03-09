@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║     WiraPro FREECAM V2.5  ·  by WiraPro                 ║
--- ║     Y2K Glass · Claude Colors · FreeCam · Orbit         ║
+-- ║     WiraPro FREECAM V2.6  ·  by WiraPro                 ║
+-- ║     Y2K Glass · FreeCam · Orbit · Teleport · PlayerList ║
 -- ╚══════════════════════════════════════════════════════════╝
 -- StarterPlayer → StarterPlayerScripts  (LocalScript)
 
@@ -174,6 +174,7 @@ TitleLabel.BackgroundTransparency=1; TitleLabel.Text="WiraPro FREECAM V2.5"; Tit
 TitleLabel.TextSize=11; TitleLabel.Font=Enum.Font.MontserratBold; TitleLabel.TextXAlignment=Enum.TextXAlignment.Left
 TitleLabel.TextScaled=false; TitleLabel.ClipsDescendants=true
 TitleLabel.ZIndex=12; TitleLabel.Parent=TBar
+TitleLabel.Text="WiraPro FREECAM V2.6"
 local MinBtn=Instance.new("TextButton"); MinBtn.Size=UDim2.new(0,30,0,30); MinBtn.Position=UDim2.new(1,-38,0.5,-15)
 MinBtn.BackgroundColor3=Color3.fromRGB(0,0,0); MinBtn.BackgroundTransparency=0.52; MinBtn.BorderSizePixel=0
 MinBtn.Text="−"; MinBtn.TextColor3=CFG.OnCoral; MinBtn.TextSize=15; MinBtn.Font=Enum.Font.MontserratBold
@@ -335,7 +336,7 @@ makeButton(efRow,"Fish Eye",UDim2.new(0.5,-3,1,0),nil,function() tgtFOV=CFG.Fish
 -- ══════════════════════════════════════════
 
 
-local orbitCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,182),nil,"OrbitCard",UDim.new(0,12),0.68)
+local orbitCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,218),nil,"OrbitCard",UDim.new(0,12),0.68)
 orbitCard.BackgroundColor3=CFG.BgCard
 
 makeLabel(orbitCard,"TARGET",UDim2.new(0,50,0,14),UDim2.new(0,8,0,8),8,true,CFG.CoralDim,Enum.TextXAlignment.Left)
@@ -361,7 +362,26 @@ local SearchBtn=makeButton(orbitCard,"CARI",UDim2.new(0,56,0,26),UDim2.new(1,-66
 
 local feedbackLbl=makeLabel(orbitCard,"",UDim2.new(1,-16,0,13),UDim2.new(0,8,0,58),8,false,CFG.CreamDim,Enum.TextXAlignment.Left)
 
-local sepLine=Instance.new("Frame"); sepLine.Size=UDim2.new(1,-16,0,1); sepLine.Position=UDim2.new(0,8,0,76)
+-- Quick Action Buttons: ORBIT + TELEPORT
+local qaRow=Instance.new("Frame"); qaRow.Size=UDim2.new(1,-16,0,26); qaRow.Position=UDim2.new(0,8,0,74)
+qaRow.BackgroundTransparency=1; qaRow.ZIndex=15; qaRow.Parent=orbitCard
+local qaL=Instance.new("UIListLayout"); qaL.FillDirection=Enum.FillDirection.Horizontal; qaL.Padding=UDim.new(0,6); qaL.Parent=qaRow
+local orbitQuickBtn=makeButton(qaRow,"◎ ORBIT",UDim2.new(0.5,-3,1,0),nil,function()
+    if not orbitTarget then feedbackLbl.Text="⚠ Cari player dulu"; feedbackLbl.TextColor3=Color3.fromRGB(255,200,80); return end
+    if not freecamActive then feedbackLbl.Text="⚠ Aktifkan freecam dulu"; feedbackLbl.TextColor3=Color3.fromRGB(255,200,80); return end
+    mode="orbit"; updateModeHL()
+    if orbitTarget and orbitTarget.Character then
+        local root=orbitTarget.Character:FindFirstChild("HumanoidRootPart")
+        if root then orbitAngle=math.atan2(camPos.X-root.Position.X,camPos.Z-root.Position.Z) end
+    end
+    feedbackLbl.Text="◎ Orbit ke "..orbitTarget.Name; feedbackLbl.TextColor3=CFG.CoralGlow
+end); orbitQuickBtn.ZIndex=16
+local tpQuickBtn=makeButton(qaRow,"⟳ TELEPORT",UDim2.new(0.5,-3,1,0),nil,function()
+    if not orbitTarget then feedbackLbl.Text="⚠ Cari player dulu"; feedbackLbl.TextColor3=Color3.fromRGB(255,200,80); return end
+    teleportToPlayer(orbitTarget)
+end); tpQuickBtn.ZIndex=16
+
+local sepLine=Instance.new("Frame"); sepLine.Size=UDim2.new(1,-16,0,1); sepLine.Position=UDim2.new(0,8,0,108)
 sepLine.BackgroundColor3=CFG.CoralDim; sepLine.BackgroundTransparency=0.55; sepLine.BorderSizePixel=0; sepLine.Parent=orbitCard
 
 -- Mini slider helper (untuk orbit, absolute y dalam orbitCard)
@@ -397,9 +417,9 @@ local function miniSlider(lbl,mn,mx,def,yOff,onChange)
     return rst
 end
 
-local resetOrbitSpd=miniSlider("Speed",  1,100,50, 82,function(v) CFG.OrbitSpeed=v*0.01 end)
-local resetOrbitRad=miniSlider("Radius", 4, 50,12,116,function(v) CFG.OrbitRadius=v end)
-local resetOrbitH  =miniSlider("Height",-10,20, 4,150,function(v) CFG.OrbitHeight=v end)
+local resetOrbitSpd=miniSlider("Speed",  1,100,50,114,function(v) CFG.OrbitSpeed=v*0.01 end)
+local resetOrbitRad=miniSlider("Radius", 4, 50,12,148,function(v) CFG.OrbitRadius=v end)
+local resetOrbitH  =miniSlider("Height",-10,20, 4,182,function(v) CFG.OrbitHeight=v end)
 
 local function resetOrbitTarget()
     orbitTarget=nil; orbitStatusLbl.Text="Diri sendiri"
@@ -431,12 +451,149 @@ SearchBtn.MouseButton1Click:Connect(function() findOrbitTarget(InputBox.Text) en
 InputBox.FocusLost:Connect(function(ep) if ep then findOrbitTarget(InputBox.Text) end end)
 
 -- ══════════════════════════════════════════
+-- TELEPORT FUNCTION
+-- ══════════════════════════════════════════
+local function teleportToPlayer(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then
+        feedbackLbl.Text="⚠ Karakter tidak ditemukan"; feedbackLbl.TextColor3=Color3.fromRGB(255,200,80); return
+    end
+    local root=targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not root then
+        feedbackLbl.Text="⚠ HumanoidRootPart tidak ada"; feedbackLbl.TextColor3=Color3.fromRGB(255,200,80); return
+    end
+    local myChar=Player.Character
+    if not myChar then feedbackLbl.Text="⚠ Karakter kamu tidak ada"; feedbackLbl.TextColor3=Color3.fromRGB(255,200,80); return end
+    local myRoot=myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then feedbackLbl.Text="⚠ HumanoidRootPart kamu tidak ada"; feedbackLbl.TextColor3=Color3.fromRGB(255,200,80); return end
+    local offset=Vector3.new(3,0,0)
+    myRoot.CFrame=root.CFrame+offset
+    feedbackLbl.Text="✓ Teleport ke "..targetPlayer.Name; feedbackLbl.TextColor3=CFG.CoralGlow
+end
+
+-- ══════════════════════════════════════════
 -- RESET ALL + Y2K DOTS
 -- ══════════════════════════════════════════
 makeButton(ScrollFrame,"↺  Reset All",UDim2.new(1,0,0,32),nil,function()
     resetFOV(); resetSpeed(); resetTilt()
     resetOrbitSpd(); resetOrbitRad(); resetOrbitH()
     resetOrbitTarget()
+end)
+
+-- ══════════════════════════════════════════
+-- PLAYER LIST CARD  (Auto-refresh, Click = Teleport)
+-- ══════════════════════════════════════════
+local plCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,20),nil,"PlayerListCard",UDim.new(0,12),0.68)
+plCard.BackgroundColor3=CFG.BgCard
+
+-- Header row
+local plHeaderRow=Instance.new("Frame"); plHeaderRow.Size=UDim2.new(1,0,0,22); plHeaderRow.Position=UDim2.new(0,0,0,0)
+plHeaderRow.BackgroundTransparency=1; plHeaderRow.Parent=plCard
+makeLabel(plHeaderRow,"◈ PLAYER LIST",UDim2.new(0.70,0,1,0),UDim2.new(0,8,0,0),8,true,CFG.CoralDim,Enum.TextXAlignment.Left)
+local plCountLbl=makeLabel(plHeaderRow,"0 online",UDim2.new(0.30,-8,1,0),UDim2.new(0.70,0,0,0),8,false,CFG.CreamDim,Enum.TextXAlignment.Right)
+
+-- Scrollable inner list
+local plScroll=Instance.new("ScrollingFrame")
+plScroll.Size=UDim2.new(1,-4,1,-26); plScroll.Position=UDim2.new(0,2,0,24)
+plScroll.BackgroundTransparency=1; plScroll.BorderSizePixel=0
+plScroll.ScrollBarThickness=2; plScroll.ScrollBarImageColor3=CFG.Coral; plScroll.ScrollBarImageTransparency=0.38
+plScroll.CanvasSize=UDim2.new(0,0,0,0); plScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
+plScroll.ZIndex=12; plScroll.Parent=plCard
+local plLayout=Instance.new("UIListLayout"); plLayout.Padding=UDim.new(0,3); plLayout.HorizontalAlignment=Enum.HorizontalAlignment.Center; plLayout.Parent=plScroll
+
+local function buildPlayerList()
+    -- Clear existing rows
+    for _,c in ipairs(plScroll:GetChildren()) do
+        if c:IsA("Frame") then c:Destroy() end
+    end
+    local allPlayers=Players:GetPlayers()
+    plCountLbl.Text=tostring(#allPlayers).." online"
+
+    -- Dynamically resize plCard
+    local rowH=28; local headerH=26; local maxRows=6; local padding=6
+    local visible=math.min(#allPlayers,maxRows)
+    local listH=math.max(visible*rowH+(visible-1)*3,28)
+    plCard.Size=UDim2.new(1,0,0,headerH+listH+padding)
+    plScroll.Size=UDim2.new(1,-4,0,listH)
+
+    for _,p in ipairs(allPlayers) do
+        local row=Instance.new("Frame"); row.Size=UDim2.new(1,0,0,rowH)
+        row.BackgroundColor3=CFG.BgBase; row.BackgroundTransparency=0.55; row.BorderSizePixel=0; row.Parent=plScroll
+        local rC=Instance.new("UICorner"); rC.CornerRadius=UDim.new(0,6); rC.Parent=row
+        local rS=Instance.new("UIStroke"); rS.Color=CFG.CoralDim; rS.Thickness=1; rS.Transparency=0.55; rS.Parent=row
+
+        -- Avatar color dot
+        local dot=Instance.new("Frame"); dot.Size=UDim2.new(0,8,0,8); dot.Position=UDim2.new(0,7,0.5,-4)
+        dot.BackgroundColor3=(p==Player) and CFG.CoralGlow or CFG.Coral; dot.BackgroundTransparency=0.20; dot.BorderSizePixel=0; dot.Parent=row
+        local dC=Instance.new("UICorner"); dC.CornerRadius=UDim.new(1,0); dC.Parent=dot
+
+        -- Name label
+        local nameStr=(p==Player) and p.Name.." ★" or p.Name
+        local nameLbl=makeLabel(row,nameStr,UDim2.new(0.58,0,1,0),UDim2.new(0,20,0,0),9,true,p==Player and CFG.CoralGlow or CFG.Cream,Enum.TextXAlignment.Left)
+
+        -- UserId label
+        local idLbl=makeLabel(row,"ID:"..p.UserId,UDim2.new(0.42,-60,1,0),UDim2.new(0.58,0,0,0),8,false,CFG.CreamDim,Enum.TextXAlignment.Left)
+
+        if p~=Player then
+            -- ORBIT mini button
+            local orBtn=Instance.new("TextButton"); orBtn.Size=UDim2.new(0,26,0,18); orBtn.Position=UDim2.new(1,-58,0.5,-9)
+            orBtn.BackgroundColor3=CFG.BgCard; orBtn.BackgroundTransparency=0.20; orBtn.BorderSizePixel=0
+            orBtn.Text="ORB"; orBtn.TextColor3=CFG.CoralGlow; orBtn.TextSize=8; orBtn.Font=Enum.Font.MontserratBold
+            orBtn.AutoButtonColor=false; orBtn.ZIndex=16; orBtn.Parent=row
+            local oBtnC=Instance.new("UICorner"); oBtnC.CornerRadius=UDim.new(0,5); oBtnC.Parent=orBtn
+            local oBtnS=Instance.new("UIStroke"); oBtnS.Color=CFG.Coral; oBtnS.Thickness=1; oBtnS.Transparency=0.38; oBtnS.Parent=orBtn
+
+            -- TELEPORT mini button
+            local tpBtn=Instance.new("TextButton"); tpBtn.Size=UDim2.new(0,26,0,18); tpBtn.Position=UDim2.new(1,-28,0.5,-9)
+            tpBtn.BackgroundColor3=CFG.Coral; tpBtn.BackgroundTransparency=0.28; tpBtn.BorderSizePixel=0
+            tpBtn.Text="TP"; tpBtn.TextColor3=CFG.OnCoral; tpBtn.TextSize=8; tpBtn.Font=Enum.Font.MontserratBold
+            tpBtn.AutoButtonColor=false; tpBtn.ZIndex=16; tpBtn.Parent=row
+            local tpBtnC=Instance.new("UICorner"); tpBtnC.CornerRadius=UDim.new(0,5); tpBtnC.Parent=tpBtn
+            local tpBtnS=Instance.new("UIStroke"); tpBtnS.Color=CFG.CoralLight; tpBtnS.Thickness=1; tpBtnS.Transparency=0.28; tpBtnS.Parent=tpBtn
+
+            -- Hover effects
+            local function pCapture(tgt,p2)
+                local cp=p2; return tgt,cp
+            end
+            orBtn.MouseEnter:Connect(function() TweenService:Create(orBtn,TweenInfo.new(0.08),{BackgroundTransparency=0.0}):Play() end)
+            orBtn.MouseLeave:Connect(function() TweenService:Create(orBtn,TweenInfo.new(0.08),{BackgroundTransparency=0.20}):Play() end)
+            tpBtn.MouseEnter:Connect(function() TweenService:Create(tpBtn,TweenInfo.new(0.08),{BackgroundTransparency=0.0}):Play() end)
+            tpBtn.MouseLeave:Connect(function() TweenService:Create(tpBtn,TweenInfo.new(0.08),{BackgroundTransparency=0.28}):Play() end)
+
+            local capturedPlayer=p
+            orBtn.MouseButton1Click:Connect(function()
+                orbitTarget=capturedPlayer
+                orbitStatusLbl.Text=capturedPlayer.Name
+                feedbackLbl.Text="◎ Orbit → "..capturedPlayer.Name.." ["..capturedPlayer.UserId.."]"; feedbackLbl.TextColor3=CFG.CoralGlow
+                InputBox.Text=tostring(capturedPlayer.UserId)
+                if freecamActive then
+                    mode="orbit"; updateModeHL()
+                    if capturedPlayer.Character then
+                        local root=capturedPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if root then orbitAngle=math.atan2(camPos.X-root.Position.X,camPos.Z-root.Position.Z) end
+                    end
+                end
+            end)
+            tpBtn.MouseButton1Click:Connect(function()
+                teleportToPlayer(capturedPlayer)
+            end)
+        else
+            -- Self label
+            local selfLbl=makeLabel(row,"(kamu)",UDim2.new(0,40,1,0),UDim2.new(1,-44,0,0),8,false,CFG.CoralDim,Enum.TextXAlignment.Right)
+        end
+    end
+end
+
+-- Initial build
+buildPlayerList()
+
+-- Auto-refresh on player join / leave
+Players.PlayerAdded:Connect(function()
+    task.wait(0.5) -- wait for player to be fully added
+    buildPlayerList()
+end)
+Players.PlayerRemoving:Connect(function()
+    task.wait(0.1)
+    buildPlayerList()
 end)
 
 local dotRow=Instance.new("Frame"); dotRow.Size=UDim2.new(1,0,0,10)
@@ -645,7 +802,8 @@ end)
 
 task.spawn(function()
     task.wait(0.1)
-    print("✦ WiraPro FREECAM V2.5  [Y2K Glass · Orbit Target]")
+    print("✦ WiraPro FREECAM V2.6  [Y2K Glass · Orbit · Teleport · PlayerList]")
     print("  FREE  : WASD+Q/E gerak | RMB rotate")
-    print("  ORBIT : Isi UserId/Username → CARI → pilih ORBIT")
+    print("  ORBIT : Isi UserId/Username → CARI → ORBIT atau TELEPORT")
+    print("  PLAYER LIST : Klik TP untuk teleport langsung, ORB untuk orbit")
 end)
