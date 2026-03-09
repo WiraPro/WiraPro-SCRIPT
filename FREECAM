@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║     WiraPro FREECAM V2.6  ·  by WiraPro                 ║
--- ║     Y2K Glass · FreeCam · Orbit · Teleport · PlayerList ║
+-- ║     WiraPro FREECAM V2.7  ·  by WiraPro                 ║
+-- ║     Y2K Glass · FreeCam · Orbit · Teleport · ESP        ║
 -- ╚══════════════════════════════════════════════════════════╝
 -- StarterPlayer → StarterPlayerScripts  (LocalScript)
 
@@ -37,6 +37,7 @@ local savedCamType=nil; local savedFOV=CFG.DefaultFOV
 local orbitAngle=0; local orbitTarget=nil
 local leftActive=false; local rightActive=false; local leftId=nil; local rightId=nil
 local leftStart=Vector2.new(0,0); local leftCur=Vector2.new(0,0); local lastRight=Vector2.new(0,0)
+local espActive=false; local espLabels={}
 
 local ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="WiraProFreecam"; ScreenGui.ResetOnSpawn=false
@@ -174,7 +175,7 @@ TitleLabel.BackgroundTransparency=1; TitleLabel.Text="WiraPro FREECAM V2.5"; Tit
 TitleLabel.TextSize=11; TitleLabel.Font=Enum.Font.MontserratBold; TitleLabel.TextXAlignment=Enum.TextXAlignment.Left
 TitleLabel.TextScaled=false; TitleLabel.ClipsDescendants=true
 TitleLabel.ZIndex=12; TitleLabel.Parent=TBar
-TitleLabel.Text="WiraPro FREECAM V2.6"
+TitleLabel.Text="WiraPro FREECAM V2.7"
 local MinBtn=Instance.new("TextButton"); MinBtn.Size=UDim2.new(0,30,0,30); MinBtn.Position=UDim2.new(1,-38,0.5,-15)
 MinBtn.BackgroundColor3=Color3.fromRGB(0,0,0); MinBtn.BackgroundTransparency=0.52; MinBtn.BorderSizePixel=0
 MinBtn.Text="−"; MinBtn.TextColor3=CFG.OnCoral; MinBtn.TextSize=15; MinBtn.Font=Enum.Font.MontserratBold
@@ -219,7 +220,8 @@ ScrollFrame.ScrollBarThickness=3; ScrollFrame.ScrollBarImageColor3=CFG.Coral; Sc
 ScrollFrame.CanvasSize=UDim2.new(0,0,0,0); ScrollFrame.AutomaticCanvasSize=Enum.AutomaticSize.Y
 ScrollFrame.ZIndex=11; ScrollFrame.Parent=MainPanel
 local CLayout=Instance.new("UIListLayout"); CLayout.Padding=UDim.new(0,7)
-CLayout.HorizontalAlignment=Enum.HorizontalAlignment.Center; CLayout.Parent=ScrollFrame
+CLayout.HorizontalAlignment=Enum.HorizontalAlignment.Center
+CLayout.SortOrder=Enum.SortOrder.LayoutOrder; CLayout.Parent=ScrollFrame
 local CPad=Instance.new("UIPadding")
 CPad.PaddingLeft=UDim.new(0,10); CPad.PaddingRight=UDim.new(0,10)
 CPad.PaddingTop=UDim.new(0,8); CPad.PaddingBottom=UDim.new(0,10); CPad.Parent=ScrollFrame
@@ -228,7 +230,7 @@ CPad.PaddingTop=UDim.new(0,8); CPad.PaddingBottom=UDim.new(0,10); CPad.Parent=Sc
 -- TOGGLE CARD
 -- ══════════════════════════════════════════
 local ToggleCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,52),nil,"ToggleCard",UDim.new(0,12),0.68)
-ToggleCard.BackgroundColor3=CFG.BgCard
+ToggleCard.BackgroundColor3=CFG.BgCard; ToggleCard.LayoutOrder=30
 local ToggleClick=Instance.new("TextButton"); ToggleClick.Size=UDim2.new(1,0,1,0)
 ToggleClick.BackgroundTransparency=1; ToggleClick.Text=""; ToggleClick.ZIndex=20; ToggleClick.Parent=ToggleCard
 local ledRing=Instance.new("Frame"); ledRing.Size=UDim2.new(0,22,0,22); ledRing.Position=UDim2.new(0,12,0.5,-11)
@@ -258,7 +260,7 @@ local ToggleSub=makeLabel(ToggleCard,"tap to activate",UDim2.new(1,-50,0,14),UDi
 
 
 local camCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,194),nil,"CamCard",UDim.new(0,12),0.68)
-camCard.BackgroundColor3=CFG.BgCard
+camCard.BackgroundColor3=CFG.BgCard; camCard.LayoutOrder=10
 
 -- Baris 1 — Camera Mode (FREE CAM | ORBIT)
 makeLabel(camCard,"Mode",UDim2.new(0,36,0,13),UDim2.new(0,8,0,8),8,true,CFG.CoralDim,Enum.TextXAlignment.Left)
@@ -337,7 +339,7 @@ makeButton(efRow,"Fish Eye",UDim2.new(0.5,-3,1,0),nil,function() tgtFOV=CFG.Fish
 
 
 local orbitCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,218),nil,"OrbitCard",UDim.new(0,12),0.68)
-orbitCard.BackgroundColor3=CFG.BgCard
+orbitCard.BackgroundColor3=CFG.BgCard; orbitCard.LayoutOrder=20
 
 makeLabel(orbitCard,"TARGET",UDim2.new(0,50,0,14),UDim2.new(0,8,0,8),8,true,CFG.CoralDim,Enum.TextXAlignment.Left)
 local orbitStatusLbl=makeLabel(orbitCard,"Diri sendiri",UDim2.new(1,-80,0,14),UDim2.new(0,60,0,8),9,true,CFG.CoralGlow,Enum.TextXAlignment.Left)
@@ -464,19 +466,20 @@ local function teleportToPlayer(targetPlayer)
 end
 
 -- ══════════════════════════════════════════
--- RESET ALL + Y2K DOTS
+-- RESET ALL
 -- ══════════════════════════════════════════
-makeButton(ScrollFrame,"↺  Reset All",UDim2.new(1,0,0,32),nil,function()
+local resetAllBtn=makeButton(ScrollFrame,"Reset All",UDim2.new(1,0,0,32),nil,function()
     resetFOV(); resetSpeed(); resetTilt()
     resetOrbitSpd(); resetOrbitRad(); resetOrbitH()
     resetOrbitTarget()
 end)
+resetAllBtn.LayoutOrder=40
 
 -- ══════════════════════════════════════════
 -- PLAYER LIST CARD  (Auto-refresh, Click = Teleport)
 -- ══════════════════════════════════════════
 local plCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,20),nil,"PlayerListCard",UDim.new(0,12),0.68)
-plCard.BackgroundColor3=CFG.BgCard
+plCard.BackgroundColor3=CFG.BgCard; plCard.LayoutOrder=50
 
 -- Header row
 local plHeaderRow=Instance.new("Frame"); plHeaderRow.Size=UDim2.new(1,0,0,22); plHeaderRow.Position=UDim2.new(0,0,0,0)
@@ -590,7 +593,7 @@ Players.PlayerRemoving:Connect(function()
 end)
 
 local dotRow=Instance.new("Frame"); dotRow.Size=UDim2.new(1,0,0,10)
-dotRow.BackgroundTransparency=1; dotRow.Parent=ScrollFrame
+dotRow.BackgroundTransparency=1; dotRow.LayoutOrder=60; dotRow.Parent=ScrollFrame
 for i=1,5 do
     local dot=Instance.new("Frame"); dot.Size=UDim2.new(0,4,0,4)
     dot.Position=UDim2.new(0.5,-18+(i-1)*9,0.5,-2)
@@ -599,6 +602,28 @@ for i=1,5 do
     dot.BorderSizePixel=0; dot.Parent=dotRow
     local dC=Instance.new("UICorner"); dC.CornerRadius=UDim.new(1,0); dC.Parent=dot
 end
+
+-- ══════════════════════════════════════════
+-- ESP CARD
+-- ══════════════════════════════════════════
+local espCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,52),nil,"ESPCard",UDim.new(0,12),0.68)
+espCard.BackgroundColor3=CFG.BgCard; espCard.LayoutOrder=70
+
+-- Toggle button (full card clickable)
+local espToggleClick=Instance.new("TextButton"); espToggleClick.Size=UDim2.new(1,0,1,0)
+espToggleClick.BackgroundTransparency=1; espToggleClick.Text=""; espToggleClick.ZIndex=20; espToggleClick.Parent=espCard
+
+-- LED ring
+local espLedRing=Instance.new("Frame"); espLedRing.Size=UDim2.new(0,22,0,22); espLedRing.Position=UDim2.new(0,12,0.5,-11)
+espLedRing.BackgroundColor3=Color3.fromRGB(0,0,0); espLedRing.BackgroundTransparency=0.52; espLedRing.BorderSizePixel=0; espLedRing.Parent=espCard
+local espLrC=Instance.new("UICorner"); espLrC.CornerRadius=UDim.new(1,0); espLrC.Parent=espLedRing
+local espLrS=Instance.new("UIStroke"); espLrS.Color=CFG.Coral; espLrS.Thickness=1.3; espLrS.Transparency=0.22; espLrS.Parent=espLedRing
+local espLED=Instance.new("Frame"); espLED.Size=UDim2.new(0,10,0,10); espLED.Position=UDim2.new(0.5,-5,0.5,-5)
+espLED.BackgroundColor3=Color3.fromRGB(45,25,0); espLED.BorderSizePixel=0; espLED.Parent=espLedRing
+local espLedC=Instance.new("UICorner"); espLedC.CornerRadius=UDim.new(1,0); espLedC.Parent=espLED
+
+local espToggleLbl=makeLabel(espCard,"ESP  OFF",UDim2.new(1,-50,0,22),UDim2.new(0,44,0,7),13,true,CFG.CreamDim,Enum.TextXAlignment.Left)
+local espToggleSub=makeLabel(espCard,"nama & jarak player",UDim2.new(1,-50,0,14),UDim2.new(0,44,0,28),9,false,CFG.CreamDim,Enum.TextXAlignment.Left)
 
 -- ══════════════════════════════════════════
 -- HIDE / SHOW GUIs
@@ -741,6 +766,142 @@ UserInputService.TouchEnded:Connect(function(t,gpe)
 end)
 
 -- ══════════════════════════════════════════
+-- ESP LOGIC
+-- ══════════════════════════════════════════
+
+-- Container ScreenGui khusus ESP (terpisah supaya tidak terpengaruh hideOthers)
+local EspGui=Instance.new("ScreenGui")
+EspGui.Name="WiraProESP"; EspGui.ResetOnSpawn=false
+EspGui.DisplayOrder=1000; EspGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+EspGui.Parent=PlayerGui
+
+local function createEspLabel(p)
+    if espLabels[p] then return end
+    -- Nama (bold, warna dinamis)
+    local nameLbl=Instance.new("TextLabel")
+    nameLbl.Name="ESP_Name_"..p.Name
+    nameLbl.Size=UDim2.new(0,160,0,16)
+    -- Nama: anchor tengah-tengah
+    nameLbl.AnchorPoint=Vector2.new(0.5,0.5)
+    nameLbl.BackgroundTransparency=1
+    nameLbl.Text=p.Name
+    nameLbl.TextColor3=CFG.CoralGlow
+    nameLbl.TextSize=13
+    nameLbl.Font=Enum.Font.MontserratBold
+    nameLbl.TextXAlignment=Enum.TextXAlignment.Center
+    nameLbl.TextStrokeTransparency=0.4
+    nameLbl.TextStrokeColor3=Color3.fromRGB(0,0,0)
+    nameLbl.ZIndex=10; nameLbl.Parent=EspGui
+    -- Jarak (kecil, di bawah nama)
+    local distLbl=Instance.new("TextLabel")
+    distLbl.Name="ESP_Dist_"..p.Name
+    distLbl.Size=UDim2.new(0,160,0,13)
+    -- Jarak: anchor tengah-tengah
+    distLbl.AnchorPoint=Vector2.new(0.5,0.5)
+    distLbl.BackgroundTransparency=1
+    distLbl.Text="-- m"
+    distLbl.TextColor3=CFG.Cream
+    distLbl.TextSize=10
+    distLbl.Font=Enum.Font.Montserrat
+    distLbl.TextXAlignment=Enum.TextXAlignment.Center
+    distLbl.TextStrokeTransparency=0.4
+    distLbl.TextStrokeColor3=Color3.fromRGB(0,0,0)
+    distLbl.ZIndex=10; distLbl.Parent=EspGui
+    espLabels[p]={nameLbl=nameLbl,distLbl=distLbl}
+end
+
+local function removeEspLabel(p)
+    if espLabels[p] then
+        espLabels[p].nameLbl:Destroy()
+        espLabels[p].distLbl:Destroy()
+        espLabels[p]=nil
+    end
+end
+
+local function clearAllEspLabels()
+    for p,_ in pairs(espLabels) do removeEspLabel(p) end
+end
+
+local function enableESP()
+    espActive=true
+    for _,p in ipairs(Players:GetPlayers()) do
+        if p~=Player then createEspLabel(p) end
+    end
+    espToggleLbl.Text="ESP  ON"; espToggleLbl.TextColor3=CFG.CoralGlow
+    espToggleSub.TextColor3=CFG.CoralGlow
+    TweenService:Create(espLED,TweenInfo.new(0.18),{BackgroundColor3=CFG.Coral}):Play()
+    TweenService:Create(espCard,TweenInfo.new(0.18),{BackgroundColor3=Color3.fromRGB(30,15,0)}):Play()
+end
+
+local function disableESP()
+    espActive=false
+    clearAllEspLabels()
+    espToggleLbl.Text="ESP  OFF"; espToggleLbl.TextColor3=CFG.CreamDim
+    espToggleSub.TextColor3=CFG.CreamDim
+    TweenService:Create(espLED,TweenInfo.new(0.18),{BackgroundColor3=Color3.fromRGB(45,25,0)}):Play()
+    TweenService:Create(espCard,TweenInfo.new(0.18),{BackgroundColor3=CFG.BgCard}):Play()
+end
+
+espToggleClick.MouseButton1Click:Connect(function()
+    if espActive then disableESP() else enableESP() end
+end)
+
+-- Auto manage labels saat player join/leave
+Players.PlayerAdded:Connect(function(p)
+    if espActive and p~=Player then
+        task.wait(0.5); createEspLabel(p)
+    end
+end)
+Players.PlayerRemoving:Connect(function(p)
+    removeEspLabel(p)
+end)
+
+-- 1 stud ≈ 0.28 meter (konvensi Roblox)
+local STUD_TO_METER=0.28
+
+-- Update posisi label setiap frame
+RunService.RenderStepped:Connect(function()
+    if not espActive then return end
+    local myPos
+    if freecamActive then
+        myPos=Camera.CFrame.Position
+    else
+        local myChar=Player.Character
+        local myRoot=myChar and myChar:FindFirstChild("HumanoidRootPart")
+        myPos=myRoot and myRoot.Position or Camera.CFrame.Position
+    end
+    for p,data in pairs(espLabels) do
+        if not p or not p.Parent then removeEspLabel(p); continue end
+        local char=p.Character
+        local root=char and char:FindFirstChild("HumanoidRootPart")
+        if not root then
+            data.nameLbl.Visible=false; data.distLbl.Visible=false; continue
+        end
+        local headPos=root.Position+Vector3.new(0,3.5,0)
+        local screenPos,onScreen=Camera:WorldToViewportPoint(headPos)
+        if not onScreen or screenPos.Z<=0 then
+            data.nameLbl.Visible=false; data.distLbl.Visible=false; continue
+        end
+        data.nameLbl.Visible=true; data.distLbl.Visible=true
+        -- Nama di atas kepala (naik 10px dari titik kepala), jarak di bawahnya (+13px)
+        data.nameLbl.Position=UDim2.new(0,screenPos.X,0,screenPos.Y-10)
+        data.distLbl.Position=UDim2.new(0,screenPos.X,0,screenPos.Y+3)
+        -- Jarak dalam meter
+        local studs=(myPos-root.Position).Magnitude
+        local meters=studs*STUD_TO_METER
+        local distStr
+        if meters>=1000 then distStr=string.format("%.1f km",meters/1000)
+        elseif meters>=1 then distStr=string.format("%.1f m",meters)
+        else distStr=string.format("%.2f m",meters) end
+        data.distLbl.Text=distStr
+        -- Warna nama: merah dekat, oranye sedang, putih jauh (pakai meter)
+        if meters<=8 then data.nameLbl.TextColor3=Color3.fromRGB(255,100,100)
+        elseif meters<=22 then data.nameLbl.TextColor3=CFG.CoralGlow
+        else data.nameLbl.TextColor3=CFG.Cream end
+    end
+end)
+
+-- ══════════════════════════════════════════
 -- RENDER LOOP
 -- ══════════════════════════════════════════
 RunService.RenderStepped:Connect(function(dt)
@@ -795,8 +956,8 @@ end)
 
 task.spawn(function()
     task.wait(0.1)
-    print("✦ WiraPro FREECAM V2.6  [Y2K Glass · Orbit · Teleport · PlayerList]")
+    print("✦ WiraPro FREECAM V2.7  [Y2K Glass · Orbit · Teleport · ESP]")
     print("  FREE  : WASD+Q/E gerak | RMB rotate")
-    print("  ORBIT : Isi UserId/Username → CARI → ORBIT atau TELEPORT")
-    print("  PLAYER LIST : Klik TP untuk teleport langsung, ORB untuk orbit")
+    print("  ORBIT : Isi UserId/Username → CARI → ORBIT")
+    print("  ESP   : Tap kartu ESP untuk ON/OFF — tampil nama + jarak")
 end)
