@@ -362,11 +362,8 @@ local SearchBtn=makeButton(orbitCard,"CARI",UDim2.new(0,56,0,26),UDim2.new(1,-66
 
 local feedbackLbl=makeLabel(orbitCard,"",UDim2.new(1,-16,0,13),UDim2.new(0,8,0,58),8,false,CFG.CreamDim,Enum.TextXAlignment.Left)
 
--- Quick Action Buttons: ORBIT + TELEPORT
-local qaRow=Instance.new("Frame"); qaRow.Size=UDim2.new(1,-16,0,26); qaRow.Position=UDim2.new(0,8,0,74)
-qaRow.BackgroundTransparency=1; qaRow.ZIndex=15; qaRow.Parent=orbitCard
-local qaL=Instance.new("UIListLayout"); qaL.FillDirection=Enum.FillDirection.Horizontal; qaL.Padding=UDim.new(0,6); qaL.Parent=qaRow
-local orbitQuickBtn=makeButton(qaRow,"◎ ORBIT",UDim2.new(0.5,-3,1,0),nil,function()
+-- Quick Action: hanya ORBIT (full width)
+local orbitQuickBtn=makeButton(orbitCard,"◎ ORBIT",UDim2.new(1,-16,0,26),UDim2.new(0,8,0,74),function()
     if not orbitTarget then feedbackLbl.Text="⚠ Cari player dulu"; feedbackLbl.TextColor3=Color3.fromRGB(255,200,80); return end
     if not freecamActive then feedbackLbl.Text="⚠ Aktifkan freecam dulu"; feedbackLbl.TextColor3=Color3.fromRGB(255,200,80); return end
     mode="orbit"; updateModeHL()
@@ -376,10 +373,6 @@ local orbitQuickBtn=makeButton(qaRow,"◎ ORBIT",UDim2.new(0.5,-3,1,0),nil,funct
     end
     feedbackLbl.Text="◎ Orbit ke "..orbitTarget.Name; feedbackLbl.TextColor3=CFG.CoralGlow
 end); orbitQuickBtn.ZIndex=16
-local tpQuickBtn=makeButton(qaRow,"⟳ TELEPORT",UDim2.new(0.5,-3,1,0),nil,function()
-    if not orbitTarget then feedbackLbl.Text="⚠ Cari player dulu"; feedbackLbl.TextColor3=Color3.fromRGB(255,200,80); return end
-    teleportToPlayer(orbitTarget)
-end); tpQuickBtn.ZIndex=16
 
 local sepLine=Instance.new("Frame"); sepLine.Size=UDim2.new(1,-16,0,1); sepLine.Position=UDim2.new(0,8,0,108)
 sepLine.BackgroundColor3=CFG.CoralDim; sepLine.BackgroundTransparency=0.55; sepLine.BorderSizePixel=0; sepLine.Parent=orbitCard
