@@ -1,6 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║     WiraPro FREECAM V2.7  ·  by WiraPro                 ║
+-- ║     WiraPro FREECAM V2.8  ·  by WiraPro                 ║
 -- ║     Y2K Glass · FreeCam · Orbit · Teleport · ESP        ║
+-- ║     + UI Persistence Guard (anti Hide-UI)               ║
 -- ╚══════════════════════════════════════════════════════════╝
 -- StarterPlayer → StarterPlayerScripts  (LocalScript)
 
@@ -43,6 +44,67 @@ local ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="WiraProFreecam"; ScreenGui.ResetOnSpawn=false
 ScreenGui.DisplayOrder=999; ScreenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent=PlayerGui
+
+-- ══════════════════════════════════════════
+-- UI PERSISTENCE PROTECTION
+-- Mencegah UI hilang ketika game menggunakan
+-- fitur "Hide UI" / CoreGui visibility toggle
+-- ══════════════════════════════════════════
+local function enforceUIVisibility()
+    -- Pastikan ScreenGui selalu visible & tidak terhapus
+    if not ScreenGui or not ScreenGui.Parent then
+        -- Buat ulang jika terhapus
+        ScreenGui=Instance.new("ScreenGui")
+        ScreenGui.Name="WiraProFreecam"; ScreenGui.ResetOnSpawn=false
+        ScreenGui.DisplayOrder=999; ScreenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+                ScreenGui.Parent=PlayerGui
+    end
+    -- Paksa selalu enabled & visible
+    ScreenGui.Enabled=true
+end
+
+-- Monitor setiap perubahan pada ScreenGui (Enabled, Parent, dll)
+ScreenGui:GetPropertyChangedSignal("Enabled"):Connect(function()
+    if not ScreenGui.Enabled then
+        task.defer(function() ScreenGui.Enabled=true end)
+    end
+end)
+
+ScreenGui:GetPropertyChangedSignal("Parent"):Connect(function()
+    if ScreenGui.Parent~=PlayerGui then
+        task.defer(function()
+            pcall(function() ScreenGui.Parent=PlayerGui end)
+        end)
+    end
+end)
+
+-- Monitor PlayerGui: jika ada script yang destroy ScreenGui milik kita
+PlayerGui.ChildRemoved:Connect(function(child)
+    if child.Name=="WiraProFreecam" then
+        task.defer(enforceUIVisibility)
+    end
+end)
+
+-- Periodically enforce tiap 1 detik sebagai fallback
+task.spawn(function()
+    while true do
+        task.wait(1)
+        pcall(enforceUIVisibility)
+    end
+end)
+
+-- Proteksi tambahan: monitor semua descendants PlayerGui yang mencoba
+-- mengubah visibility seluruh UI (teknik umum "Hide All UI")
+PlayerGui.DescendantAdded:Connect(function(obj)
+    -- Cegah script lain menghide ScreenGui kita
+    if obj:IsA("LocalScript") or obj:IsA("Script") then
+        task.defer(function()
+            if ScreenGui then
+                pcall(function() ScreenGui.Enabled=true end)
+            end
+        end)
+    end
+end)
 
 -- UI HELPERS
 local function makeGlass(parent,size,pos,name,radius,alpha)
@@ -173,9 +235,9 @@ end
 local TitleLabel=Instance.new("TextLabel"); TitleLabel.Size=UDim2.new(1,-88,1,0); TitleLabel.Position=UDim2.new(0,36,0,0)
 TitleLabel.BackgroundTransparency=1; TitleLabel.Text="WiraPro FREECAM V2.5"; TitleLabel.TextColor3=CFG.OnCoral
 TitleLabel.TextSize=11; TitleLabel.Font=Enum.Font.MontserratBold; TitleLabel.TextXAlignment=Enum.TextXAlignment.Left
-TitleLabel.TextScaled=false; TitleLabel.ClipsDescendants=true
+TitleLabel.TextScaled=false; TitleLabel.ClipsDescendants=false
 TitleLabel.ZIndex=12; TitleLabel.Parent=TBar
-TitleLabel.Text="WiraPro FREECAM V2.7"
+TitleLabel.Text="WiraPro FREECAM V2.8"
 local MinBtn=Instance.new("TextButton"); MinBtn.Size=UDim2.new(0,30,0,30); MinBtn.Position=UDim2.new(1,-38,0.5,-15)
 MinBtn.BackgroundColor3=Color3.fromRGB(0,0,0); MinBtn.BackgroundTransparency=0.52; MinBtn.BorderSizePixel=0
 MinBtn.Text="−"; MinBtn.TextColor3=CFG.OnCoral; MinBtn.TextSize=15; MinBtn.Font=Enum.Font.MontserratBold
@@ -186,29 +248,54 @@ MinBtn.MouseEnter:Connect(function() TweenService:Create(MinBtn,TweenInfo.new(0.
 MinBtn.MouseLeave:Connect(function() TweenService:Create(MinBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(0,0,0),BackgroundTransparency=0.52}):Play() end)
 
 -- PANEL DRAG
-local dragConn=nil
-TBar.InputBegan:Connect(function(inp)
-    if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
-        draggingPanel=true; dragStart=Vector2.new(inp.Position.X,inp.Position.Y)
-        panelStart=Vector2.new(MainPanel.AbsolutePosition.X,MainPanel.AbsolutePosition.Y)
-        if dragConn then dragConn:Disconnect() end
-        dragConn=UserInputService.InputChanged:Connect(function(mi)
-            if not draggingPanel then return end
-            if mi.UserInputType==Enum.UserInputType.MouseMovement or mi.UserInputType==Enum.UserInputType.Touch then
-                local d=Vector2.new(mi.Position.X-dragStart.X,mi.Position.Y-dragStart.Y)
-                MainPanel.Position=UDim2.new(0,panelStart.X+d.X,0,panelStart.Y+d.Y)
-            end
-        end)
+-- Pakai invisible TextButton di atas TBar + delta-based drag yang benar
+local DragBtn = Instance.new("TextButton")
+DragBtn.Size = UDim2.new(1, -44, 1, 0)
+DragBtn.Position = UDim2.new(0, 0, 0, 0)
+DragBtn.BackgroundTransparency = 1
+DragBtn.Text = ""
+DragBtn.AutoButtonColor = false
+DragBtn.ZIndex = 99
+DragBtn.Parent = TBar
+
+-- panelStartX/Y menyimpan pixel offset posisi panel saat drag dimulai
+-- (sudah dikonversi dari AbsolutePosition agar tidak ada loncatan)
+local panelStartX, panelStartY = 0, 0
+local dragStartX, dragStartY = 0, 0
+
+DragBtn.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+        draggingPanel = true
+        local pos = UserInputService:GetMouseLocation()
+        dragStartX, dragStartY = pos.X, pos.Y
+        -- Simpan posisi absolut panel sekarang sebagai titik awal
+        -- AbsolutePosition sudah valid karena panel sudah render
+        panelStartX = MainPanel.AbsolutePosition.X
+        panelStartY = MainPanel.AbsolutePosition.Y
+        -- Langsung convert panel ke pure pixel offset supaya drag konsisten
+        MainPanel.Position = UDim2.new(0, panelStartX, 0, panelStartY)
     end
 end)
-TBar.InputEnded:Connect(function(inp)
-    if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
-        draggingPanel=false; if dragConn then dragConn:Disconnect(); dragConn=nil end
+
+DragBtn.InputChanged:Connect(function(inp)
+    if not draggingPanel then return end
+    if inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch then
+        local pos = UserInputService:GetMouseLocation()
+        local newX = panelStartX + (pos.X - dragStartX)
+        local newY = panelStartY + (pos.Y - dragStartY)
+        MainPanel.Position = UDim2.new(0, newX, 0, newY)
     end
 end)
+
+DragBtn.InputEnded:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+        draggingPanel = false
+    end
+end)
+
 UserInputService.InputEnded:Connect(function(inp)
-    if (inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch) and draggingPanel then
-        draggingPanel=false; if dragConn then dragConn:Disconnect(); dragConn=nil end
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+        draggingPanel = false
     end
 end)
 
@@ -227,10 +314,80 @@ CPad.PaddingLeft=UDim.new(0,10); CPad.PaddingRight=UDim.new(0,10)
 CPad.PaddingTop=UDim.new(0,8); CPad.PaddingBottom=UDim.new(0,10); CPad.Parent=ScrollFrame
 
 -- ══════════════════════════════════════════
+-- UI SETTINGS CARD  (Opacity + Mini Size)
+-- ══════════════════════════════════════════
+local uiCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,94),nil,"UISettingsCard",UDim.new(0,12),0.68)
+uiCard.BackgroundColor3=CFG.BgCard
+uiCard.LayoutOrder=0
+
+-- Track helper lokal untuk card ini
+local function uiSlider(card,lbl,mn,mx,def,yOff,fmt,onChange)
+    makeLabel(card,lbl,UDim2.new(0.62,0,0,14),UDim2.new(0,8,0,yOff),10,false,CFG.CreamDim,Enum.TextXAlignment.Left)
+    local vL=makeLabel(card,fmt(def),UDim2.new(0.38,-8,0,14),UDim2.new(0.62,0,0,yOff),10,true,CFG.Cream,Enum.TextXAlignment.Right)
+    local trk=Instance.new("Frame"); trk.Size=UDim2.new(1,-16,0,5); trk.Position=UDim2.new(0,8,0,yOff+16)
+    trk.BackgroundColor3=CFG.BgBase; trk.BackgroundTransparency=0.38; trk.BorderSizePixel=0; trk.Parent=card
+    local tC=Instance.new("UICorner"); tC.CornerRadius=UDim.new(1,0); tC.Parent=trk
+    local tS=Instance.new("UIStroke"); tS.Color=CFG.CoralDim; tS.Thickness=1; tS.Transparency=0.48; tS.Parent=trk
+    local fill=Instance.new("Frame"); fill.Size=UDim2.new((def-mn)/(mx-mn),0,1,0)
+    fill.BackgroundColor3=CFG.Coral; fill.BackgroundTransparency=0.18; fill.BorderSizePixel=0; fill.Parent=trk
+    local fC=Instance.new("UICorner"); fC.CornerRadius=UDim.new(1,0); fC.Parent=fill
+    local knob=Instance.new("Frame"); knob.Size=UDim2.new(0,14,0,14); knob.Position=UDim2.new((def-mn)/(mx-mn),-7,0.5,-7)
+    knob.BackgroundColor3=CFG.CoralGlow; knob.BackgroundTransparency=0.08; knob.BorderSizePixel=0; knob.ZIndex=6; knob.Parent=trk
+    local kC=Instance.new("UICorner"); kC.CornerRadius=UDim.new(1,0); kC.Parent=knob
+    local kS=Instance.new("UIStroke"); kS.Color=Color3.fromRGB(255,255,255); kS.Thickness=1; kS.Transparency=0.52; kS.Parent=knob
+    local kSh=Instance.new("Frame"); kSh.Size=UDim2.new(0.5,0,0,2); kSh.Position=UDim2.new(0.18,0,0,2)
+    kSh.BackgroundColor3=Color3.fromRGB(255,255,255); kSh.BackgroundTransparency=0.42; kSh.BorderSizePixel=0; kSh.ZIndex=7; kSh.Parent=knob
+    local kShC=Instance.new("UICorner"); kShC.CornerRadius=UDim.new(1,0); kShC.Parent=kSh
+    local dg=false
+    local function upd(pos)
+        local r=math.clamp((pos.X-trk.AbsolutePosition.X)/trk.AbsoluteSize.X,0,1)
+        local v=math.floor(mn+r*(mx-mn)+0.5); local sr=(v-mn)/(mx-mn)
+        fill.Size=UDim2.new(sr,0,1,0); knob.Position=UDim2.new(sr,-7,0.5,-7)
+        vL.Text=fmt(v); if onChange then onChange(v) end
+    end
+    knob.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dg=true end end)
+    trk.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dg=true; upd(i.Position) end end)
+    UserInputService.InputChanged:Connect(function(i) if dg and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then upd(i.Position) end end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dg=false end end)
+end
+
+-- Variabel ukuran mini (bisa diubah slider)
+local currentMiniW = 180
+
+-- Baris 1 — Opacity UI  (10% = hampir transparan, 100% = solid)
+makeLabel(uiCard,"UI SETTINGS",UDim2.new(1,-16,0,13),UDim2.new(0,8,0,5),8,true,CFG.CoralDim,Enum.TextXAlignment.Left)
+makeSep(uiCard,20)
+uiSlider(uiCard,"Opacity",10,100,40,26,function(v) return v.."%" end,function(v)
+    -- Terapkan ke MainPanel dan semua glass child-nya
+    local t = 1-(v/100)
+    -- clamp agar tidak hilang total
+    t = math.clamp(t, 0.02, 0.92)
+    MainPanel.BackgroundTransparency = t
+    for _,c in ipairs(MainPanel:GetChildren()) do
+        if c:IsA("Frame") and c.Name~="UIStroke" then
+            -- hanya ubah panel utama, bukan konten
+        end
+    end
+    -- Ubah UIStroke opacity juga agar terlihat konsisten
+    for _,c in ipairs(MainPanel:GetDescendants()) do
+        if c:IsA("UIStroke") and c.Parent==MainPanel then
+            c.Transparency = math.clamp(t-0.1,0,0.9)
+        end
+    end
+end)
+
+-- Sep + Baris 2 — Minimized Width
+makeSep(uiCard,58)
+uiSlider(uiCard,"Mini Width",120,300,180,62,function(v) return v.."px" end,function(v)
+    currentMiniW = v
+end)
+
+-- ══════════════════════════════════════════
 -- TOGGLE CARD
 -- ══════════════════════════════════════════
 local ToggleCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,52),nil,"ToggleCard",UDim.new(0,12),0.68)
-ToggleCard.BackgroundColor3=CFG.BgCard; ToggleCard.LayoutOrder=30
+ToggleCard.BackgroundColor3=CFG.BgCard
+ToggleCard.LayoutOrder=3
 local ToggleClick=Instance.new("TextButton"); ToggleClick.Size=UDim2.new(1,0,1,0)
 ToggleClick.BackgroundTransparency=1; ToggleClick.Text=""; ToggleClick.ZIndex=20; ToggleClick.Parent=ToggleCard
 local ledRing=Instance.new("Frame"); ledRing.Size=UDim2.new(0,22,0,22); ledRing.Position=UDim2.new(0,12,0.5,-11)
@@ -260,7 +417,8 @@ local ToggleSub=makeLabel(ToggleCard,"tap to activate",UDim2.new(1,-50,0,14),UDi
 
 
 local camCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,194),nil,"CamCard",UDim.new(0,12),0.68)
-camCard.BackgroundColor3=CFG.BgCard; camCard.LayoutOrder=10
+camCard.BackgroundColor3=CFG.BgCard
+camCard.LayoutOrder=1
 
 -- Baris 1 — Camera Mode (FREE CAM | ORBIT)
 makeLabel(camCard,"Mode",UDim2.new(0,36,0,13),UDim2.new(0,8,0,8),8,true,CFG.CoralDim,Enum.TextXAlignment.Left)
@@ -339,7 +497,8 @@ makeButton(efRow,"Fish Eye",UDim2.new(0.5,-3,1,0),nil,function() tgtFOV=CFG.Fish
 
 
 local orbitCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,218),nil,"OrbitCard",UDim.new(0,12),0.68)
-orbitCard.BackgroundColor3=CFG.BgCard; orbitCard.LayoutOrder=20
+orbitCard.BackgroundColor3=CFG.BgCard
+orbitCard.LayoutOrder=2
 
 makeLabel(orbitCard,"TARGET",UDim2.new(0,50,0,14),UDim2.new(0,8,0,8),8,true,CFG.CoralDim,Enum.TextXAlignment.Left)
 local orbitStatusLbl=makeLabel(orbitCard,"Diri sendiri",UDim2.new(1,-80,0,14),UDim2.new(0,60,0,8),9,true,CFG.CoralGlow,Enum.TextXAlignment.Left)
@@ -466,20 +625,21 @@ local function teleportToPlayer(targetPlayer)
 end
 
 -- ══════════════════════════════════════════
--- RESET ALL
+-- RESET ALL + Y2K DOTS
 -- ══════════════════════════════════════════
 local resetAllBtn=makeButton(ScrollFrame,"Reset All",UDim2.new(1,0,0,32),nil,function()
     resetFOV(); resetSpeed(); resetTilt()
     resetOrbitSpd(); resetOrbitRad(); resetOrbitH()
     resetOrbitTarget()
 end)
-resetAllBtn.LayoutOrder=40
+resetAllBtn.LayoutOrder=4
 
 -- ══════════════════════════════════════════
 -- PLAYER LIST CARD  (Auto-refresh, Click = Teleport)
 -- ══════════════════════════════════════════
 local plCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,20),nil,"PlayerListCard",UDim.new(0,12),0.68)
-plCard.BackgroundColor3=CFG.BgCard; plCard.LayoutOrder=50
+plCard.BackgroundColor3=CFG.BgCard
+plCard.LayoutOrder=5
 
 -- Header row
 local plHeaderRow=Instance.new("Frame"); plHeaderRow.Size=UDim2.new(1,0,0,22); plHeaderRow.Position=UDim2.new(0,0,0,0)
@@ -593,7 +753,7 @@ Players.PlayerRemoving:Connect(function()
 end)
 
 local dotRow=Instance.new("Frame"); dotRow.Size=UDim2.new(1,0,0,10)
-dotRow.BackgroundTransparency=1; dotRow.LayoutOrder=60; dotRow.Parent=ScrollFrame
+dotRow.BackgroundTransparency=1; dotRow.LayoutOrder=6; dotRow.Parent=ScrollFrame
 for i=1,5 do
     local dot=Instance.new("Frame"); dot.Size=UDim2.new(0,4,0,4)
     dot.Position=UDim2.new(0.5,-18+(i-1)*9,0.5,-2)
@@ -607,7 +767,8 @@ end
 -- ESP CARD
 -- ══════════════════════════════════════════
 local espCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,52),nil,"ESPCard",UDim.new(0,12),0.68)
-espCard.BackgroundColor3=CFG.BgCard; espCard.LayoutOrder=70
+espCard.BackgroundColor3=CFG.BgCard
+espCard.LayoutOrder=7
 
 -- Toggle button (full card clickable)
 local espToggleClick=Instance.new("TextButton"); espToggleClick.Size=UDim2.new(1,0,1,0)
@@ -701,9 +862,35 @@ MinBtn.MouseButton1Click:Connect(function()
     isMinimized=not isMinimized
     if isMinimized then
         ScrollFrame.Visible=false
-        TweenService:Create(MainPanel,TweenInfo.new(0.22,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{Size=UDim2.new(0,180,0,44)}):Play()
+        -- Hitung TextSize proporsional: makin kecil panel makin kecil teks
+        local ratio = currentMiniW / 244
+        local miniTextSize = math.max(7, math.floor(11 * ratio))
+        -- Kecilkan MinBtn agar tidak nutup teks
+        local miniBtnSize = math.max(20, math.floor(26 * ratio))
+        TweenService:Create(MinBtn, TweenInfo.new(0.18), {
+            Size = UDim2.new(0, miniBtnSize, 0, miniBtnSize),
+            Position = UDim2.new(1, -(miniBtnSize+6), 0.5, -miniBtnSize/2),
+            TextSize = math.max(9, math.floor(13 * ratio))
+        }):Play()
+        -- Sesuaikan TitleLabel agar tidak overlap tombol
+        TitleLabel.Size = UDim2.new(1, -(miniBtnSize+12), 1, 0)
+        TitleLabel.TextSize = miniTextSize
+        TitleLabel.TextScaled = false
+        TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+        TweenService:Create(MainPanel,TweenInfo.new(0.22,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{Size=UDim2.new(0,currentMiniW,0,44)}):Play()
         MinBtn.Text="+"
     else
+        -- Restore MinBtn ke ukuran normal
+        TweenService:Create(MinBtn, TweenInfo.new(0.20), {
+            Size = UDim2.new(0, 30, 0, 30),
+            Position = UDim2.new(1, -38, 0.5, -15),
+            TextSize = 15
+        }):Play()
+        -- Restore TitleLabel ke ukuran & style normal
+        TitleLabel.Size = UDim2.new(1,-88,1,0)
+        TitleLabel.TextSize = 11
+        TitleLabel.TextScaled = false
+        TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
         TweenService:Create(MainPanel,TweenInfo.new(0.28,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{Size=UDim2.new(0,244,0,PANEL_H)}):Play()
         task.delay(0.20,function() ScrollFrame.Visible=true end)
         MinBtn.Text="−"
@@ -781,8 +968,7 @@ local function createEspLabel(p)
     local nameLbl=Instance.new("TextLabel")
     nameLbl.Name="ESP_Name_"..p.Name
     nameLbl.Size=UDim2.new(0,160,0,16)
-    -- Nama: anchor tengah-tengah
-    nameLbl.AnchorPoint=Vector2.new(0.5,0.5)
+    nameLbl.AnchorPoint=Vector2.new(0.5,1)
     nameLbl.BackgroundTransparency=1
     nameLbl.Text=p.Name
     nameLbl.TextColor3=CFG.CoralGlow
@@ -796,8 +982,7 @@ local function createEspLabel(p)
     local distLbl=Instance.new("TextLabel")
     distLbl.Name="ESP_Dist_"..p.Name
     distLbl.Size=UDim2.new(0,160,0,13)
-    -- Jarak: anchor tengah-tengah
-    distLbl.AnchorPoint=Vector2.new(0.5,0.5)
+    distLbl.AnchorPoint=Vector2.new(0.5,0)
     distLbl.BackgroundTransparency=1
     distLbl.Text="-- m"
     distLbl.TextColor3=CFG.Cream
@@ -877,15 +1062,15 @@ RunService.RenderStepped:Connect(function()
         if not root then
             data.nameLbl.Visible=false; data.distLbl.Visible=false; continue
         end
-        local headPos=root.Position+Vector3.new(0,3.5,0)
+        local headPos=root.Position+Vector3.new(0,2.8,0)
         local screenPos,onScreen=Camera:WorldToViewportPoint(headPos)
         if not onScreen or screenPos.Z<=0 then
             data.nameLbl.Visible=false; data.distLbl.Visible=false; continue
         end
         data.nameLbl.Visible=true; data.distLbl.Visible=true
-        -- Nama di atas kepala (naik 10px dari titik kepala), jarak di bawahnya (+13px)
-        data.nameLbl.Position=UDim2.new(0,screenPos.X,0,screenPos.Y-10)
-        data.distLbl.Position=UDim2.new(0,screenPos.X,0,screenPos.Y+3)
+        -- Nama di atas, jarak tepat di bawahnya
+        data.nameLbl.Position=UDim2.new(0,screenPos.X,0,screenPos.Y)
+        data.distLbl.Position=UDim2.new(0,screenPos.X,0,screenPos.Y+1)
         -- Jarak dalam meter
         local studs=(myPos-root.Position).Magnitude
         local meters=studs*STUD_TO_METER
@@ -956,7 +1141,7 @@ end)
 
 task.spawn(function()
     task.wait(0.1)
-    print("✦ WiraPro FREECAM V2.7  [Y2K Glass · Orbit · Teleport · ESP]")
+    print("✦ WiraPro FREECAM V2.8  [Y2K Glass · Orbit · Teleport · ESP · UI Guard]")
     print("  FREE  : WASD+Q/E gerak | RMB rotate")
     print("  ORBIT : Isi UserId/Username → CARI → ORBIT")
     print("  ESP   : Tap kartu ESP untuk ON/OFF — tampil nama + jarak")
