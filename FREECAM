@@ -445,6 +445,255 @@ makeSep(uiCard,58)
 uiSlider(uiCard,"Mini Width",120,300,180,62,function(v) return v.."px" end,function(v) currentMiniW=v end)
 
 -- ══════════════════════════════════════════
+-- FULLBRIGHT CARD  ← NEW
+-- ══════════════════════════════════════════
+local Lighting = game:GetService("Lighting")
+local fullbrightActive = false
+local savedLighting = {}
+
+local function saveLighting()
+    savedLighting = {
+        Brightness        = Lighting.Brightness,
+        Ambient           = Lighting.Ambient,
+        OutdoorAmbient    = Lighting.OutdoorAmbient,
+        FogEnd            = Lighting.FogEnd,
+        FogStart          = Lighting.FogStart,
+        GlobalShadows     = Lighting.GlobalShadows,
+        ClockTime         = Lighting.ClockTime,
+    }
+end
+
+local function enableFullbright()
+    saveLighting()
+    Lighting.Brightness     = 2
+    Lighting.Ambient        = Color3.fromRGB(178,178,178)
+    Lighting.OutdoorAmbient = Color3.fromRGB(178,178,178)
+    Lighting.FogEnd         = 100000
+    Lighting.FogStart       = 99999
+    Lighting.GlobalShadows  = false
+    fullbrightActive = true
+end
+
+local function disableFullbright()
+    if savedLighting.Brightness then
+        Lighting.Brightness     = savedLighting.Brightness
+        Lighting.Ambient        = savedLighting.Ambient
+        Lighting.OutdoorAmbient = savedLighting.OutdoorAmbient
+        Lighting.FogEnd         = savedLighting.FogEnd
+        Lighting.FogStart       = savedLighting.FogStart
+        Lighting.GlobalShadows  = savedLighting.GlobalShadows
+        Lighting.ClockTime      = savedLighting.ClockTime
+    end
+    fullbrightActive = false
+end
+
+local fbCard = makeGlass(ScrollFrame, UDim2.new(1,0,0,52), nil, "FullbrightCard", UDim.new(0,12), 0.68)
+fbCard.BackgroundColor3 = CFG.BgCard; reg(fbCard,"BackgroundColor3","BgCard")
+fbCard.LayoutOrder = 11
+
+local fbClick = Instance.new("TextButton"); fbClick.Size = UDim2.new(1,0,1,0)
+fbClick.BackgroundTransparency = 1; fbClick.Text = ""; fbClick.ZIndex = 20; fbClick.Parent = fbCard
+
+-- LED ring
+local fbLedRing = Instance.new("Frame"); fbLedRing.Size = UDim2.new(0,22,0,22); fbLedRing.Position = UDim2.new(0,12,0.5,-11)
+fbLedRing.BackgroundColor3 = Color3.fromRGB(0,0,0); fbLedRing.BackgroundTransparency = 0.52; fbLedRing.BorderSizePixel = 0; fbLedRing.Parent = fbCard
+local fbLrC = Instance.new("UICorner"); fbLrC.CornerRadius = UDim.new(1,0); fbLrC.Parent = fbLedRing
+local fbLrS = Instance.new("UIStroke"); fbLrS.Color = CFG.Coral; fbLrS.Thickness = 1.3; fbLrS.Transparency = 0.22; fbLrS.Parent = fbLedRing
+reg(fbLrS,"Color","Coral")
+local fbLED = Instance.new("Frame"); fbLED.Size = UDim2.new(0,10,0,10); fbLED.Position = UDim2.new(0.5,-5,0.5,-5)
+fbLED.BackgroundColor3 = Color3.fromRGB(45,25,0); fbLED.BorderSizePixel = 0; fbLED.Parent = fbLedRing
+local fbLedC = Instance.new("UICorner"); fbLedC.CornerRadius = UDim.new(1,0); fbLedC.Parent = fbLED
+
+local fbToggleLbl = makeLabel(fbCard,"FULLBRIGHT  OFF",UDim2.new(1,-50,0,22),UDim2.new(0,44,0,7),13,true,CFG.CreamDim,Enum.TextXAlignment.Left)
+local fbToggleSub = makeLabel(fbCard,"maksimalkan visibility",UDim2.new(1,-50,0,14),UDim2.new(0,44,0,28),9,false,CFG.CreamDim,Enum.TextXAlignment.Left)
+
+fbClick.MouseButton1Click:Connect(function()
+    if fullbrightActive then
+        disableFullbright()
+        fbToggleLbl.Text = "FULLBRIGHT  OFF"; fbToggleLbl.TextColor3 = CFG.CreamDim
+        fbToggleSub.TextColor3 = CFG.CreamDim
+        TweenService:Create(fbLED,TweenInfo.new(0.18),{BackgroundColor3=Color3.fromRGB(45,25,0)}):Play()
+        TweenService:Create(fbCard,TweenInfo.new(0.18),{BackgroundColor3=CFG.BgCard}):Play()
+    else
+        enableFullbright()
+        fbToggleLbl.Text = "FULLBRIGHT  ON"; fbToggleLbl.TextColor3 = CFG.CoralGlow
+        fbToggleSub.TextColor3 = CFG.CoralGlow
+        TweenService:Create(fbLED,TweenInfo.new(0.18),{BackgroundColor3=CFG.Coral}):Play()
+        TweenService:Create(fbCard,TweenInfo.new(0.18),{BackgroundColor3=Color3.fromRGB(30,20,5)}):Play()
+    end
+end)
+
+-- ══════════════════════════════════════════
+-- CAMERA GRID CARD  ← NEW
+-- Grid rule-of-thirds overlay on screen
+-- ══════════════════════════════════════════
+local gridActive = false
+
+-- ScreenGui khusus grid (Z tinggi, terpisah)
+-- ScreenGui grid pakai IgnoreGuiInset agar benar-benar full layar
+-- (tanpa IgnoreGuiInset, ScreenGui mulai dari bawah topbar Roblox)
+local GridGui = Instance.new("ScreenGui")
+GridGui.Name            = "WiraProGrid"
+GridGui.ResetOnSpawn    = false
+GridGui.DisplayOrder    = 998
+GridGui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
+GridGui.IgnoreGuiInset  = true   -- ← kunci agar mulai dari (0,0) sudut layar
+GridGui.Enabled         = false
+GridGui.Parent          = PlayerGui
+
+-- Container transparan full-screen
+local gridContainer = Instance.new("Frame")
+gridContainer.Size               = UDim2.new(1,0,1,0)
+gridContainer.Position           = UDim2.new(0,0,0,0)
+gridContainer.BackgroundTransparency = 1
+gridContainer.BorderSizePixel    = 0
+gridContainer.ClipsDescendants   = false
+gridContainer.Parent             = GridGui
+
+-- Helper buat garis grid (1px, full span)
+local function makeGridLine(isVertical, offset, thickness, col, alpha)
+    local line = Instance.new("Frame")
+    if isVertical then
+        line.Size     = UDim2.new(0, thickness, 1, 0)
+        line.Position = UDim2.new(offset, -math.floor(thickness/2), 0, 0)
+        line.AnchorPoint = Vector2.new(0, 0)
+    else
+        line.Size     = UDim2.new(1, 0, 0, thickness)
+        line.Position = UDim2.new(0, 0, offset, -math.floor(thickness/2))
+        line.AnchorPoint = Vector2.new(0, 0)
+    end
+    line.BackgroundColor3    = col
+    line.BackgroundTransparency = alpha
+    line.BorderSizePixel     = 0
+    line.ZIndex              = 5
+    line.Parent              = gridContainer
+    return line
+end
+
+local gridLineColor = Color3.fromRGB(255,255,255)
+
+-- Rule of Thirds — 4 garis utama
+makeGridLine(true,  1/3, 1, gridLineColor, 0.42)  -- vertikal 1/3
+makeGridLine(true,  2/3, 1, gridLineColor, 0.42)  -- vertikal 2/3
+makeGridLine(false, 1/3, 1, gridLineColor, 0.42)  -- horisontal 1/3
+makeGridLine(false, 2/3, 1, gridLineColor, 0.42)  -- horisontal 2/3
+
+-- Center lines (crosshair tengah, lebih tipis/transparan)
+makeGridLine(true,  0.5, 1, gridLineColor, 0.75)
+makeGridLine(false, 0.5, 1, gridLineColor, 0.75)
+
+-- Diagonal guide lines (X pattern, sangat tipis)
+local diagColors = Color3.fromRGB(255,255,255)
+local function makeDiagLine(flipH)
+    local d = Instance.new("Frame")
+    -- Diagonal menggunakan rotation trick: panjang = sqrt(w²+h²), dirotasi
+    -- Karena Roblox tidak support rotation murni pada Frame di ScreenGui,
+    -- kita pakai UIGradient pada frame tipis yang distretch diagonal
+    -- → gunakan ImageLabel dengan diagonal gradient sebagai fallback
+    -- Alternatif sederhana: buat frame tipis sangat panjang dan rotate via script
+    -- Roblox 2D UI TIDAK support Rotation pada Frame (hanya ImageLabel/TextLabel)
+    -- Solusi: skip diagonal, fokus pada grid kotak yang clean
+end
+
+-- 4 titik intersection rule of thirds (golden dots)
+local intersections = {{1/3,1/3},{2/3,1/3},{1/3,2/3},{2/3,2/3}}
+for _, p in ipairs(intersections) do
+    -- Outer ring
+    local ring = Instance.new("Frame")
+    ring.Size            = UDim2.new(0,14,0,14)
+    ring.Position        = UDim2.new(p[1],-7,p[2],-7)
+    ring.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    ring.BackgroundTransparency = 1
+    ring.BorderSizePixel = 0
+    ring.ZIndex          = 6
+    ring.Parent          = gridContainer
+    local ringStroke = Instance.new("UIStroke")
+    ringStroke.Color       = Color3.fromRGB(255,215,80)
+    ringStroke.Thickness   = 1.2
+    ringStroke.Transparency = 0.15
+    ringStroke.Parent      = ring
+    local rC = Instance.new("UICorner"); rC.CornerRadius = UDim.new(1,0); rC.Parent = ring
+    -- Inner dot
+    local dot = Instance.new("Frame")
+    dot.Size              = UDim2.new(0,5,0,5)
+    dot.Position          = UDim2.new(p[1],-2.5,p[2],-2.5)
+    dot.BackgroundColor3  = Color3.fromRGB(255,215,80)
+    dot.BackgroundTransparency = 0.10
+    dot.BorderSizePixel   = 0
+    dot.ZIndex            = 7
+    dot.Parent            = gridContainer
+    local dC = Instance.new("UICorner"); dC.CornerRadius = UDim.new(1,0); dC.Parent = dot
+end
+
+-- Center dot (tengah layar)
+local centerDot = Instance.new("Frame")
+centerDot.Size             = UDim2.new(0,6,0,6)
+centerDot.Position         = UDim2.new(0.5,-3,0.5,-3)
+centerDot.BackgroundColor3 = Color3.fromRGB(255,255,255)
+centerDot.BackgroundTransparency = 0.30
+centerDot.BorderSizePixel  = 0; centerDot.ZIndex = 7
+centerDot.Parent           = gridContainer
+local cdC = Instance.new("UICorner"); cdC.CornerRadius = UDim.new(1,0); cdC.Parent = centerDot
+
+-- Border luar full layar (UIStroke pada gridContainer sendiri)
+local outerStroke = Instance.new("UIStroke")
+outerStroke.Color       = Color3.fromRGB(255,255,255)
+outerStroke.Thickness   = 1.5
+outerStroke.Transparency = 0.58
+outerStroke.Parent      = gridContainer
+
+-- Label pojok kiri atas
+local gridLabel = Instance.new("TextLabel")
+gridLabel.Size               = UDim2.new(0,130,0,16)
+gridLabel.Position           = UDim2.new(0,8,0,6)
+gridLabel.BackgroundTransparency = 1
+gridLabel.Text               = "⊞ Rule of Thirds"
+gridLabel.TextColor3         = Color3.fromRGB(255,255,255)
+gridLabel.TextSize           = 10
+gridLabel.Font               = Enum.Font.MontserratBold
+gridLabel.TextXAlignment     = Enum.TextXAlignment.Left
+gridLabel.TextTransparency   = 0.38
+gridLabel.ZIndex             = 8
+gridLabel.Parent             = gridContainer
+
+-- CARD
+local gridCard = makeGlass(ScrollFrame, UDim2.new(1,0,0,52), nil, "GridCard", UDim.new(0,12), 0.68)
+gridCard.BackgroundColor3 = CFG.BgCard; reg(gridCard,"BackgroundColor3","BgCard")
+gridCard.LayoutOrder = 12
+
+local gridClick = Instance.new("TextButton"); gridClick.Size = UDim2.new(1,0,1,0)
+gridClick.BackgroundTransparency = 1; gridClick.Text = ""; gridClick.ZIndex = 20; gridClick.Parent = gridCard
+
+-- LED ring
+local gridLedRing = Instance.new("Frame"); gridLedRing.Size = UDim2.new(0,22,0,22); gridLedRing.Position = UDim2.new(0,12,0.5,-11)
+gridLedRing.BackgroundColor3 = Color3.fromRGB(0,0,0); gridLedRing.BackgroundTransparency = 0.52; gridLedRing.BorderSizePixel = 0; gridLedRing.Parent = gridCard
+local gridLrC = Instance.new("UICorner"); gridLrC.CornerRadius = UDim.new(1,0); gridLrC.Parent = gridLedRing
+local gridLrS = Instance.new("UIStroke"); gridLrS.Color = CFG.Coral; gridLrS.Thickness = 1.3; gridLrS.Transparency = 0.22; gridLrS.Parent = gridLedRing
+reg(gridLrS,"Color","Coral")
+local gridLED = Instance.new("Frame"); gridLED.Size = UDim2.new(0,10,0,10); gridLED.Position = UDim2.new(0.5,-5,0.5,-5)
+gridLED.BackgroundColor3 = Color3.fromRGB(45,25,0); gridLED.BorderSizePixel = 0; gridLED.Parent = gridLedRing
+local gridLedC = Instance.new("UICorner"); gridLedC.CornerRadius = UDim.new(1,0); gridLedC.Parent = gridLED
+
+local gridToggleLbl = makeLabel(gridCard,"CAMERA GRID  OFF",UDim2.new(1,-50,0,22),UDim2.new(0,44,0,7),13,true,CFG.CreamDim,Enum.TextXAlignment.Left)
+local gridToggleSub = makeLabel(gridCard,"rule of thirds overlay",UDim2.new(1,-50,0,14),UDim2.new(0,44,0,28),9,false,CFG.CreamDim,Enum.TextXAlignment.Left)
+
+gridClick.MouseButton1Click:Connect(function()
+    gridActive = not gridActive
+    GridGui.Enabled = gridActive
+    if gridActive then
+        gridToggleLbl.Text = "CAMERA GRID  ON"; gridToggleLbl.TextColor3 = CFG.CoralGlow
+        gridToggleSub.TextColor3 = CFG.CoralGlow
+        TweenService:Create(gridLED,TweenInfo.new(0.18),{BackgroundColor3=CFG.Coral}):Play()
+        TweenService:Create(gridCard,TweenInfo.new(0.18),{BackgroundColor3=Color3.fromRGB(10,20,30)}):Play()
+    else
+        gridToggleLbl.Text = "CAMERA GRID  OFF"; gridToggleLbl.TextColor3 = CFG.CreamDim
+        gridToggleSub.TextColor3 = CFG.CreamDim
+        TweenService:Create(gridLED,TweenInfo.new(0.18),{BackgroundColor3=Color3.fromRGB(45,25,0)}):Play()
+        TweenService:Create(gridCard,TweenInfo.new(0.18),{BackgroundColor3=CFG.BgCard}):Play()
+    end
+end)
+
+-- ══════════════════════════════════════════
 -- TOGGLE CARD
 -- ══════════════════════════════════════════
 local ToggleCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,52),nil,"ToggleCard",UDim.new(0,12),0.68)
@@ -933,7 +1182,7 @@ buildPreviewBar(THEMES[1])
 local hiddenGuis={}
 local function hideOthers()
     for _,g in ipairs(PlayerGui:GetChildren()) do
-        if g:IsA("ScreenGui") and g.Name~="WiraProFreecam" and g.Enabled then
+        if g:IsA("ScreenGui") and g.Name~="WiraProFreecam" and g.Name~="WiraProGrid" and g.Name~="WiraProESP" and g.Enabled then
             g.Enabled=false; table.insert(hiddenGuis,g)
         end
     end
@@ -1217,7 +1466,7 @@ end)
 
 task.spawn(function()
     task.wait(0.1)
-    print("✦ WiraPro FREECAM V2.9 [FIXED]  [Y2K Glass · Orbit · Teleport · ESP · UI Guard · Colour Theme]")
+    print("✦ WiraPro FREECAM V2.9  [Y2K Glass · Orbit · Teleport · ESP · Fullbright · Camera Grid · Colour Theme]")
     print("  FREE  : WASD+Q/E gerak | RMB rotate")
     print("  ORBIT : Isi UserId/Username → CARI → ORBIT")
     print("  ESP   : Tap kartu ESP untuk ON/OFF")
