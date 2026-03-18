@@ -158,7 +158,7 @@ local savedWalkSpeed   = 16         -- simpan saat script load
 local ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="WiraProFreecam"; ScreenGui.ResetOnSpawn=false
 ScreenGui.DisplayOrder=999; ScreenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent=PlayerGui
+ScreenGui.Parent=game:GetService("CoreGui")
 
 -- ══════════════════════════════════════════
 -- UI PERSISTENCE PROTECTION
@@ -168,7 +168,7 @@ local function enforceUIVisibility()
         ScreenGui=Instance.new("ScreenGui")
         ScreenGui.Name="WiraProFreecam"; ScreenGui.ResetOnSpawn=false
         ScreenGui.DisplayOrder=999; ScreenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-        ScreenGui.Parent=PlayerGui
+        ScreenGui.Parent=game:GetService("CoreGui")
     end
     ScreenGui.Enabled=true
 end
@@ -176,17 +176,17 @@ ScreenGui:GetPropertyChangedSignal("Enabled"):Connect(function()
     if not ScreenGui.Enabled then task.defer(function() ScreenGui.Enabled=true end) end
 end)
 ScreenGui:GetPropertyChangedSignal("Parent"):Connect(function()
-    if ScreenGui.Parent~=PlayerGui then
-        task.defer(function() pcall(function() ScreenGui.Parent=PlayerGui end) end)
+    if ScreenGui.Parent~=game:GetService("CoreGui") then
+        task.defer(function() pcall(function() ScreenGui.Parent=game:GetService("CoreGui") end) end)
     end
 end)
-PlayerGui.ChildRemoved:Connect(function(child)
+game:GetService("CoreGui").ChildRemoved:Connect(function(child)
     if child.Name=="WiraProFreecam" then task.defer(enforceUIVisibility) end
 end)
 task.spawn(function()
     while true do task.wait(1); pcall(enforceUIVisibility) end
 end)
-PlayerGui.DescendantAdded:Connect(function(obj)
+game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui").DescendantAdded:Connect(function(obj)
     if obj:IsA("LocalScript") or obj:IsA("Script") then
         task.defer(function()
             if ScreenGui then pcall(function() ScreenGui.Enabled=true end) end
@@ -550,7 +550,7 @@ GridGui.DisplayOrder    = 998
 GridGui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
 GridGui.IgnoreGuiInset  = true   -- ← kunci agar mulai dari (0,0) sudut layar
 GridGui.Enabled         = false
-GridGui.Parent          = PlayerGui
+GridGui.Parent = game:GetService("CoreGui")
 
 -- Container transparan full-screen
 local gridContainer = Instance.new("Frame")
@@ -1535,7 +1535,7 @@ end)
 local EspGui=Instance.new("ScreenGui")
 EspGui.Name="WiraProESP"; EspGui.ResetOnSpawn=false
 EspGui.DisplayOrder=1000; EspGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-EspGui.Parent=PlayerGui
+EspGui.Parent=game:GetService("CoreGui")
 
 local function createEspLabel(p)
     if espLabels[p] then return end
