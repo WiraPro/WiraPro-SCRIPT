@@ -1,9 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║     WiraPro FREECAM V3.0  ·  by WiraPro                 ║
 -- ║     Y2K Glass · FreeCam · Orbit · Teleport · ESP        ║
--- ║     + Run Speed Control · Fly ON/OFF                    ║
+-- ║     + FlyScript (POV-based, mobile-ready, speed slider) ║
 -- ║     + UI Persistence Guard (anti Hide-UI)               ║
--- ║     + Colour Theme Picker (5 tema) — FIXED              ║
+-- ║     + Colour Theme Picker (5 tema)                      ║
 -- ╚══════════════════════════════════════════════════════════╝
 -- StarterPlayer → StarterPlayerScripts  (LocalScript)
 
@@ -143,14 +143,10 @@ local leftStart=Vector2.new(0,0); local leftCur=Vector2.new(0,0); local lastRigh
 local espActive=false; local espLabels={}
 
 -- ── FLY STATE ──────────────────────────────
-local flyActive        = false
-local flySpeed         = 40          -- studs/s default
-local flyBodyVelocity  = nil
-local flyBodyGyro      = nil
-
--- ── RUN SPEED STATE ────────────────────────
-local runSpeedValue    = 16          -- WalkSpeed default Roblox
-local savedWalkSpeed   = 16         -- simpan saat script load
+local flyActive  = false
+local flySpeed   = 60
+local flyBV      = nil   -- BodyVelocity
+local flyBG      = nil   -- BodyGyro
 
 -- ══════════════════════════════════════════
 -- SCREENGUI
@@ -158,7 +154,7 @@ local savedWalkSpeed   = 16         -- simpan saat script load
 local ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="WiraProFreecam"; ScreenGui.ResetOnSpawn=false
 ScreenGui.DisplayOrder=999; ScreenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent=game:GetService("CoreGui")
+ScreenGui.Parent=PlayerGui
 
 -- ══════════════════════════════════════════
 -- UI PERSISTENCE PROTECTION
@@ -168,7 +164,7 @@ local function enforceUIVisibility()
         ScreenGui=Instance.new("ScreenGui")
         ScreenGui.Name="WiraProFreecam"; ScreenGui.ResetOnSpawn=false
         ScreenGui.DisplayOrder=999; ScreenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-        ScreenGui.Parent=game:GetService("CoreGui")
+        ScreenGui.Parent=PlayerGui
     end
     ScreenGui.Enabled=true
 end
@@ -176,17 +172,17 @@ ScreenGui:GetPropertyChangedSignal("Enabled"):Connect(function()
     if not ScreenGui.Enabled then task.defer(function() ScreenGui.Enabled=true end) end
 end)
 ScreenGui:GetPropertyChangedSignal("Parent"):Connect(function()
-    if ScreenGui.Parent~=game:GetService("CoreGui") then
-        task.defer(function() pcall(function() ScreenGui.Parent=game:GetService("CoreGui") end) end)
+    if ScreenGui.Parent~=PlayerGui then
+        task.defer(function() pcall(function() ScreenGui.Parent=PlayerGui end) end)
     end
 end)
-game:GetService("CoreGui").ChildRemoved:Connect(function(child)
+PlayerGui.ChildRemoved:Connect(function(child)
     if child.Name=="WiraProFreecam" then task.defer(enforceUIVisibility) end
 end)
 task.spawn(function()
     while true do task.wait(1); pcall(enforceUIVisibility) end
 end)
-game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui").DescendantAdded:Connect(function(obj)
+PlayerGui.DescendantAdded:Connect(function(obj)
     if obj:IsA("LocalScript") or obj:IsA("Script") then
         task.defer(function()
             if ScreenGui then pcall(function() ScreenGui.Enabled=true end) end
@@ -550,7 +546,7 @@ GridGui.DisplayOrder    = 998
 GridGui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
 GridGui.IgnoreGuiInset  = true   -- ← kunci agar mulai dari (0,0) sudut layar
 GridGui.Enabled         = false
-GridGui.Parent = game:GetService("CoreGui")
+GridGui.Parent          = PlayerGui
 
 -- Container transparan full-screen
 local gridContainer = Instance.new("Frame")
@@ -1057,7 +1053,213 @@ local espToggleLbl=makeLabel(espCard,"ESP  OFF",UDim2.new(1,-50,0,22),UDim2.new(
 local espToggleSub=makeLabel(espCard,"nama & jarak player",UDim2.new(1,-50,0,14),UDim2.new(0,44,0,28),9,false,CFG.CreamDim,Enum.TextXAlignment.Left)
 
 -- ══════════════════════════════════════════
--- ◈ COLOUR THEME CARD  ← V2.9
+-- ✈ FLY CARD  ← NEW
+-- Terbang mengikuti arah POV kamera penuh.
+-- Naik/turun otomatis saat kamera mendongak.
+-- Support analog mobile + WASD PC.
+-- Slider kecepatan 10-200.
+-- ══════════════════════════════════════════
+local flyCard = makeGlass(ScrollFrame, UDim2.new(1,0,0,108), nil, "FlyCard", UDim.new(0,12), 0.68)
+flyCard.BackgroundColor3 = CFG.BgCard; reg(flyCard,"BackgroundColor3","BgCard")
+flyCard.LayoutOrder = 8
+
+local flyClick = Instance.new("TextButton"); flyClick.Size = UDim2.new(1,0,0,52)
+flyClick.BackgroundTransparency = 1; flyClick.Text = ""; flyClick.ZIndex = 20; flyClick.Parent = flyCard
+
+-- LED ring
+local flyLedRing = Instance.new("Frame"); flyLedRing.Size = UDim2.new(0,22,0,22)
+flyLedRing.Position = UDim2.new(0,12,0,15)
+flyLedRing.BackgroundColor3 = Color3.fromRGB(0,0,0); flyLedRing.BackgroundTransparency = 0.52
+flyLedRing.BorderSizePixel = 0; flyLedRing.Parent = flyCard
+local flyLrC = Instance.new("UICorner"); flyLrC.CornerRadius = UDim.new(1,0); flyLrC.Parent = flyLedRing
+local flyLrS = Instance.new("UIStroke"); flyLrS.Color = CFG.Coral; flyLrS.Thickness = 1.3
+flyLrS.Transparency = 0.22; flyLrS.Parent = flyLedRing
+reg(flyLrS,"Color","Coral")
+local flyLED = Instance.new("Frame"); flyLED.Size = UDim2.new(0,10,0,10)
+flyLED.Position = UDim2.new(0.5,-5,0.5,-5)
+flyLED.BackgroundColor3 = Color3.fromRGB(45,25,0); flyLED.BorderSizePixel = 0; flyLED.Parent = flyLedRing
+local flyLedC = Instance.new("UICorner"); flyLedC.CornerRadius = UDim.new(1,0); flyLedC.Parent = flyLED
+
+local flyToggleLbl = makeLabel(flyCard,"FLY SCRIPT  OFF",UDim2.new(1,-50,0,22),UDim2.new(0,44,0,7),13,true,CFG.CreamDim,Enum.TextXAlignment.Left)
+local flyToggleSub = makeLabel(flyCard,"terbang mengikuti arah kamera",UDim2.new(1,-50,0,14),UDim2.new(0,44,0,28),9,false,CFG.CreamDim,Enum.TextXAlignment.Left)
+
+makeSep(flyCard,50)
+
+-- Speed slider
+makeLabel(flyCard,"Kecepatan Terbang",UDim2.new(0.62,0,0,14),UDim2.new(0,8,0,57),10,false,CFG.CreamDim,Enum.TextXAlignment.Left)
+local flySpeedVL = makeLabel(flyCard,"60",UDim2.new(0.38,-8,0,14),UDim2.new(0.62,0,0,57),10,true,CFG.Cream,Enum.TextXAlignment.Right)
+
+local flyTrk = Instance.new("Frame"); flyTrk.Size = UDim2.new(1,-16,0,5)
+flyTrk.Position = UDim2.new(0,8,0,73)
+flyTrk.BackgroundColor3 = CFG.BgBase; flyTrk.BackgroundTransparency = 0.38
+flyTrk.BorderSizePixel = 0; flyTrk.Parent = flyCard
+reg(flyTrk,"BackgroundColor3","BgBase")
+local flyTrkC = Instance.new("UICorner"); flyTrkC.CornerRadius = UDim.new(1,0); flyTrkC.Parent = flyTrk
+local flyTrkS = Instance.new("UIStroke"); flyTrkS.Color = CFG.CoralDim; flyTrkS.Thickness = 1
+flyTrkS.Transparency = 0.48; flyTrkS.Parent = flyTrk
+reg(flyTrkS,"Color","CoralDim")
+
+local FLY_SPD_MIN, FLY_SPD_MAX = 10, 200
+local flyInitR = (60 - FLY_SPD_MIN) / (FLY_SPD_MAX - FLY_SPD_MIN)
+
+local flyFill = Instance.new("Frame"); flyFill.Size = UDim2.new(flyInitR,0,1,0)
+flyFill.BackgroundColor3 = CFG.Coral; flyFill.BackgroundTransparency = 0.18
+flyFill.BorderSizePixel = 0; flyFill.Parent = flyTrk
+reg(flyFill,"BackgroundColor3","Coral")
+local flyFillC = Instance.new("UICorner"); flyFillC.CornerRadius = UDim.new(1,0); flyFillC.Parent = flyFill
+
+local flyKnob = Instance.new("Frame"); flyKnob.Size = UDim2.new(0,14,0,14)
+flyKnob.Position = UDim2.new(flyInitR,-7,0.5,-7)
+flyKnob.BackgroundColor3 = CFG.CoralGlow; flyKnob.BackgroundTransparency = 0.08
+flyKnob.BorderSizePixel = 0; flyKnob.ZIndex = 6; flyKnob.Parent = flyTrk
+reg(flyKnob,"BackgroundColor3","CoralGlow")
+local flyKnobC = Instance.new("UICorner"); flyKnobC.CornerRadius = UDim.new(1,0); flyKnobC.Parent = flyKnob
+local flyKnobS = Instance.new("UIStroke"); flyKnobS.Color = Color3.fromRGB(255,255,255)
+flyKnobS.Thickness = 1; flyKnobS.Transparency = 0.52; flyKnobS.Parent = flyKnob
+local flyKnobSh = Instance.new("Frame"); flyKnobSh.Size = UDim2.new(0.5,0,0,2)
+flyKnobSh.Position = UDim2.new(0.18,0,0,2)
+flyKnobSh.BackgroundColor3 = Color3.fromRGB(255,255,255); flyKnobSh.BackgroundTransparency = 0.42
+flyKnobSh.BorderSizePixel = 0; flyKnobSh.ZIndex = 7; flyKnobSh.Parent = flyKnob
+local flyKnobShC = Instance.new("UICorner"); flyKnobShC.CornerRadius = UDim.new(1,0); flyKnobShC.Parent = flyKnobSh
+
+-- Slider logic fly speed
+local flySliderDg = false
+local function flyUpdSpd(pos)
+    local r = math.clamp((pos.X - flyTrk.AbsolutePosition.X) / flyTrk.AbsoluteSize.X, 0, 1)
+    local v = math.floor(FLY_SPD_MIN + r * (FLY_SPD_MAX - FLY_SPD_MIN) + 0.5)
+    local sr = (v - FLY_SPD_MIN) / (FLY_SPD_MAX - FLY_SPD_MIN)
+    flyFill.Size = UDim2.new(sr,0,1,0); flyKnob.Position = UDim2.new(sr,-7,0.5,-7)
+    flySpeedVL.Text = tostring(v); flySpeed = v
+end
+flyKnob.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then flySliderDg=true end
+end)
+flyTrk.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then flySliderDg=true; flyUpdSpd(i.Position) end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if flySliderDg and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then flyUpdSpd(i.Position) end
+end)
+UserInputService.InputEnded:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then flySliderDg=false end
+end)
+
+-- ══════════════════════════════════════════
+-- FLY ENABLE / DISABLE
+-- ══════════════════════════════════════════
+local function enableFly()
+    -- Matikan freecam jika aktif
+    if freecamActive then disableFreecam() end
+
+    local ch = Player.Character
+    if not ch then return end
+    local hum  = ch:FindFirstChildOfClass("Humanoid")
+    local root = ch:FindFirstChild("HumanoidRootPart")
+    if not hum or not root then return end
+
+    flyActive         = true
+    hum.PlatformStand = true
+
+    flyBV             = Instance.new("BodyVelocity")
+    flyBV.Velocity    = Vector3.zero
+    flyBV.MaxForce    = Vector3.new(1e5, 1e5, 1e5)
+    flyBV.Parent      = root
+
+    flyBG             = Instance.new("BodyGyro")
+    flyBG.MaxTorque   = Vector3.new(1e5, 1e5, 1e5)
+    flyBG.D           = 100
+    flyBG.Parent      = root
+
+    flyToggleLbl.Text = "FLY SCRIPT  ON"; flyToggleLbl.TextColor3 = CFG.CoralGlow
+    flyToggleSub.TextColor3 = CFG.CoralGlow
+    TweenService:Create(flyLED,  TweenInfo.new(0.18), {BackgroundColor3 = CFG.Coral}):Play()
+    TweenService:Create(flyCard, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(10,25,10)}):Play()
+end
+
+local function disableFly()
+    local ch = Player.Character
+    if ch then
+        local hum = ch:FindFirstChildOfClass("Humanoid")
+        if hum then hum.PlatformStand = false; hum.WalkSpeed = 16; hum.JumpPower = 50 end
+    end
+    flyActive = false
+    if flyBV then flyBV:Destroy(); flyBV = nil end
+    if flyBG then flyBG:Destroy(); flyBG = nil end
+
+    flyToggleLbl.Text = "FLY SCRIPT  OFF"; flyToggleLbl.TextColor3 = CFG.CreamDim
+    flyToggleSub.TextColor3 = CFG.CreamDim
+    TweenService:Create(flyLED,  TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(45,25,0)}):Play()
+    TweenService:Create(flyCard, TweenInfo.new(0.18), {BackgroundColor3 = CFG.BgCard}):Play()
+end
+
+flyClick.MouseButton1Click:Connect(function()
+    if flyActive then disableFly() else enableFly() end
+end)
+
+-- Reset fly saat respawn
+Player.CharacterAdded:Connect(function()
+    flyActive = false
+    flyBV = nil; flyBG = nil
+    flyToggleLbl.Text = "FLY SCRIPT  OFF"; flyToggleLbl.TextColor3 = CFG.CreamDim
+    flyToggleSub.TextColor3 = CFG.CreamDim
+    TweenService:Create(flyLED,  TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(45,25,0)}):Play()
+    TweenService:Create(flyCard, TweenInfo.new(0.18), {BackgroundColor3 = CFG.BgCard}):Play()
+end)
+
+-- ══════════════════════════════════════════
+-- FLY RENDER LOOP
+--   Maju/mundur : ikuti LookVector kamera PENUH (pitch naik/turun otomatis)
+--   Kiri/kanan  : RightVector horizontal kamera
+--   Input       : Joystick analog mobile (MoveDirection) + WASD PC
+-- ══════════════════════════════════════════
+RunService.RenderStepped:Connect(function()
+    if not flyActive or not flyBV or not flyBG then return end
+    local ch = Player.Character
+    if not ch then return end
+    local root = ch:FindFirstChild("HumanoidRootPart")
+    local hum  = ch:FindFirstChildOfClass("Humanoid")
+    if not root or not hum then return end
+
+    local camCF2    = workspace.CurrentCamera.CFrame
+    local moveDir   = Vector3.zero
+
+    -- Basis kamera horizontal (untuk mapping analog joystick)
+    local camLook  = Vector3.new(camCF2.LookVector.X,  0, camCF2.LookVector.Z)
+    local camRight = Vector3.new(camCF2.RightVector.X, 0, camCF2.RightVector.Z)
+    if camLook.Magnitude  > 0 then camLook  = camLook.Unit  end
+    if camRight.Magnitude > 0 then camRight = camRight.Unit end
+
+    -- Analog mobile (MoveDirection dari Humanoid, world-space)
+    local md = hum.MoveDirection
+    local analogFwd   = (md.Magnitude > 0.1) and md:Dot(camLook)  or 0
+    local analogRight = (md.Magnitude > 0.1) and md:Dot(camRight) or 0
+
+    -- Keyboard WASD (PC)
+    local kbFwd   = (UserInputService:IsKeyDown(Enum.KeyCode.W) and 1 or 0)
+                  - (UserInputService:IsKeyDown(Enum.KeyCode.S) and 1 or 0)
+    local kbRight = (UserInputService:IsKeyDown(Enum.KeyCode.D) and 1 or 0)
+                  - (UserInputService:IsKeyDown(Enum.KeyCode.A) and 1 or 0)
+
+    -- Pilih input terbesar
+    local fwdInput   = math.abs(analogFwd)   > math.abs(kbFwd)   and analogFwd   or kbFwd
+    local rightInput = math.abs(analogRight) > math.abs(kbRight) and analogRight or kbRight
+
+    -- Maju/mundur: LookVector kamera PENUH (termasuk pitch → naik/turun otomatis)
+    if math.abs(fwdInput) > 0.05 then
+        moveDir = moveDir + camCF2.LookVector * fwdInput
+    end
+    -- Kiri/kanan: horizontal saja
+    if math.abs(rightInput) > 0.05 then
+        moveDir = moveDir + camRight * rightInput
+    end
+
+    if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
+
+    flyBV.Velocity = moveDir * flySpeed
+    flyBG.CFrame   = camCF2
+end)
+
+-- ══════════════════════════════════════════
 -- ══════════════════════════════════════════
 local colourCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,138),nil,"ColourCard",UDim.new(0,12),0.68)
 colourCard.BackgroundColor3=CFG.BgCard; reg(colourCard,"BackgroundColor3","BgCard")
@@ -1188,186 +1390,12 @@ end
 buildPreviewBar(THEMES[1])
 
 -- ══════════════════════════════════════════
--- ⚡ RUN SPEED CARD
+-- HIDE / SHOW GUIs
 -- ══════════════════════════════════════════
-local speedCard = makeGlass(ScrollFrame, UDim2.new(1,0,0,108), nil, "SpeedCard", UDim.new(0,12), 0.68)
-speedCard.BackgroundColor3 = CFG.BgCard; reg(speedCard,"BackgroundColor3","BgCard")
-speedCard.LayoutOrder = 13
-
--- Header
-makeLabel(speedCard,"⚡ RUN SPEED",UDim2.new(0.70,0,0,14),UDim2.new(0,8,0,7),8,true,CFG.CoralDim,Enum.TextXAlignment.Left)
-local speedCardValLbl = makeLabel(speedCard,tostring(runSpeedValue).." ws",UDim2.new(0.30,-8,0,14),UDim2.new(0.70,0,0,7),8,true,CFG.CoralGlow,Enum.TextXAlignment.Right)
-makeSep(speedCard,24)
-makeLabel(speedCard,"Atur kecepatan lari karakter",UDim2.new(1,-16,0,12),UDim2.new(0,8,0,29),8,false,CFG.CreamDim,Enum.TextXAlignment.Left)
-
--- Slider speed lari (1 – 500, default 16)
-local SP_MIN, SP_MAX, SP_DEF = 1, 500, 16
-local function makeSpeedSlider(card, yOff)
-    local trk = Instance.new("Frame"); trk.Size=UDim2.new(1,-16,0,5); trk.Position=UDim2.new(0,8,0,yOff)
-    trk.BackgroundColor3=CFG.BgBase; trk.BackgroundTransparency=0.38; trk.BorderSizePixel=0; trk.Parent=card
-    reg(trk,"BackgroundColor3","BgBase")
-    local tC=Instance.new("UICorner"); tC.CornerRadius=UDim.new(1,0); tC.Parent=trk
-    local tS=Instance.new("UIStroke"); tS.Color=CFG.CoralDim; tS.Thickness=1; tS.Transparency=0.48; tS.Parent=trk
-    reg(tS,"Color","CoralDim")
-    local fill=Instance.new("Frame"); fill.Size=UDim2.new((SP_DEF-SP_MIN)/(SP_MAX-SP_MIN),0,1,0)
-    fill.BackgroundColor3=CFG.Coral; fill.BackgroundTransparency=0.18; fill.BorderSizePixel=0; fill.Parent=trk
-    reg(fill,"BackgroundColor3","Coral")
-    local fC=Instance.new("UICorner"); fC.CornerRadius=UDim.new(1,0); fC.Parent=fill
-    local knob=Instance.new("Frame"); knob.Size=UDim2.new(0,14,0,14)
-    knob.Position=UDim2.new((SP_DEF-SP_MIN)/(SP_MAX-SP_MIN),-7,0.5,-7)
-    knob.BackgroundColor3=CFG.CoralGlow; knob.BackgroundTransparency=0.08; knob.BorderSizePixel=0; knob.ZIndex=6; knob.Parent=trk
-    reg(knob,"BackgroundColor3","CoralGlow")
-    local kC=Instance.new("UICorner"); kC.CornerRadius=UDim.new(1,0); kC.Parent=knob
-    local kS=Instance.new("UIStroke"); kS.Color=Color3.fromRGB(255,255,255); kS.Thickness=1; kS.Transparency=0.52; kS.Parent=knob
-    local kSh=Instance.new("Frame"); kSh.Size=UDim2.new(0.5,0,0,2); kSh.Position=UDim2.new(0.18,0,0,2)
-    kSh.BackgroundColor3=Color3.fromRGB(255,255,255); kSh.BackgroundTransparency=0.42; kSh.BorderSizePixel=0; kSh.ZIndex=7; kSh.Parent=knob
-    local kShC=Instance.new("UICorner"); kShC.CornerRadius=UDim.new(1,0); kShC.Parent=kSh
-    local dg=false
-    local function upd(pos)
-        local r=math.clamp((pos.X-trk.AbsolutePosition.X)/trk.AbsoluteSize.X,0,1)
-        local v=math.floor(SP_MIN+r*(SP_MAX-SP_MIN)+0.5); local sr=(v-SP_MIN)/(SP_MAX-SP_MIN)
-        fill.Size=UDim2.new(sr,0,1,0); knob.Position=UDim2.new(sr,-7,0.5,-7)
-        runSpeedValue=v; speedCardValLbl.Text=v.." ws"
-        local ch=Player.Character
-        if ch then local h=ch:FindFirstChildOfClass("Humanoid"); if h and not freecamActive and not flyActive then h.WalkSpeed=v end end
-    end
-    knob.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dg=true end end)
-    trk.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dg=true; upd(i.Position) end end)
-    UserInputService.InputChanged:Connect(function(i) if dg and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then upd(i.Position) end end)
-    UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dg=false end end)
-end
-makeSpeedSlider(speedCard, 44)
-
--- Tombol Reset & Preset
-makeSep(speedCard,62)
-local spPresetRow=Instance.new("Frame"); spPresetRow.Size=UDim2.new(1,-16,0,28); spPresetRow.Position=UDim2.new(0,8,0,70)
-spPresetRow.BackgroundTransparency=1; spPresetRow.Parent=speedCard
-local spPL=Instance.new("UIListLayout"); spPL.FillDirection=Enum.FillDirection.Horizontal; spPL.Padding=UDim.new(0,5); spPL.Parent=spPresetRow
-local function spPreset(lbl, val)
-    makeButton(spPresetRow, lbl, UDim2.new(0.25,-4,1,0), nil, function()
-        runSpeedValue=val; speedCardValLbl.Text=val.." ws"
-        local ch=Player.Character
-        if ch then local h=ch:FindFirstChildOfClass("Humanoid"); if h and not freecamActive and not flyActive then h.WalkSpeed=val end end
-    end)
-end
-spPreset("16",16); spPreset("50",50); spPreset("100",100); spPreset("Reset",16)
-
--- ══════════════════════════════════════════
--- 🪽 FLY CARD
--- ══════════════════════════════════════════
-local flyCard = makeGlass(ScrollFrame, UDim2.new(1,0,0,108), nil, "FlyCard", UDim.new(0,12), 0.68)
-flyCard.BackgroundColor3 = CFG.BgCard; reg(flyCard,"BackgroundColor3","BgCard")
-flyCard.LayoutOrder = 14
-
-local flyClick = Instance.new("TextButton"); flyClick.Size=UDim2.new(1,0,0,52)
-flyClick.BackgroundTransparency=1; flyClick.Text=""; flyClick.ZIndex=20; flyClick.Parent=flyCard
-
--- LED ring
-local flyLedRing=Instance.new("Frame"); flyLedRing.Size=UDim2.new(0,22,0,22); flyLedRing.Position=UDim2.new(0,12,0,15)
-flyLedRing.BackgroundColor3=Color3.fromRGB(0,0,0); flyLedRing.BackgroundTransparency=0.52; flyLedRing.BorderSizePixel=0; flyLedRing.Parent=flyCard
-local flyLrC=Instance.new("UICorner"); flyLrC.CornerRadius=UDim.new(1,0); flyLrC.Parent=flyLedRing
-local flyLrS=Instance.new("UIStroke"); flyLrS.Color=CFG.Coral; flyLrS.Thickness=1.3; flyLrS.Transparency=0.22; flyLrS.Parent=flyLedRing
-reg(flyLrS,"Color","Coral")
-local flyLED=Instance.new("Frame"); flyLED.Size=UDim2.new(0,10,0,10); flyLED.Position=UDim2.new(0.5,-5,0.5,-5)
-flyLED.BackgroundColor3=Color3.fromRGB(45,25,0); flyLED.BorderSizePixel=0; flyLED.Parent=flyLedRing
-local flyLedC=Instance.new("UICorner"); flyLedC.CornerRadius=UDim.new(1,0); flyLedC.Parent=flyLED
-
-local flyToggleLbl=makeLabel(flyCard,"FLY  OFF",UDim2.new(1,-50,0,22),UDim2.new(0,44,0,7),13,true,CFG.CreamDim,Enum.TextXAlignment.Left)
-local flyToggleSub=makeLabel(flyCard,"WASD gerak · E/Q naik/turun",UDim2.new(1,-50,0,14),UDim2.new(0,44,0,28),9,false,CFG.CreamDim,Enum.TextXAlignment.Left)
-
-makeSep(flyCard,52)
-
--- Slider kecepatan fly (5 – 200, default 40)
-local FLY_MIN, FLY_MAX, FLY_DEF = 5, 200, 40
-makeLabel(flyCard,"Fly Speed",UDim2.new(0.60,0,0,12),UDim2.new(0,8,0,58),9,false,CFG.CreamDim,Enum.TextXAlignment.Left)
-local flySpeedLbl=makeLabel(flyCard,FLY_DEF.." st/s",UDim2.new(0.40,-8,0,12),UDim2.new(0.60,0,0,58),9,true,CFG.Cream,Enum.TextXAlignment.Right)
-local fsTrk=Instance.new("Frame"); fsTrk.Size=UDim2.new(1,-16,0,5); fsTrk.Position=UDim2.new(0,8,0,72)
-fsTrk.BackgroundColor3=CFG.BgBase; fsTrk.BackgroundTransparency=0.38; fsTrk.BorderSizePixel=0; fsTrk.Parent=flyCard
-reg(fsTrk,"BackgroundColor3","BgBase")
-local fsTC=Instance.new("UICorner"); fsTC.CornerRadius=UDim.new(1,0); fsTC.Parent=fsTrk
-local fsTS=Instance.new("UIStroke"); fsTS.Color=CFG.CoralDim; fsTS.Thickness=1; fsTS.Transparency=0.48; fsTS.Parent=fsTrk
-reg(fsTS,"Color","CoralDim")
-local fsFl=Instance.new("Frame"); fsFl.Size=UDim2.new((FLY_DEF-FLY_MIN)/(FLY_MAX-FLY_MIN),0,1,0)
-fsFl.BackgroundColor3=CFG.Coral; fsFl.BackgroundTransparency=0.18; fsFl.BorderSizePixel=0; fsFl.Parent=fsTrk
-reg(fsFl,"BackgroundColor3","Coral")
-local fsFC=Instance.new("UICorner"); fsFC.CornerRadius=UDim.new(1,0); fsFC.Parent=fsFl
-local fsKn=Instance.new("Frame"); fsKn.Size=UDim2.new(0,14,0,14)
-fsKn.Position=UDim2.new((FLY_DEF-FLY_MIN)/(FLY_MAX-FLY_MIN),-7,0.5,-7)
-fsKn.BackgroundColor3=CFG.CoralGlow; fsKn.BackgroundTransparency=0.08; fsKn.BorderSizePixel=0; fsKn.ZIndex=6; fsKn.Parent=fsTrk
-reg(fsKn,"BackgroundColor3","CoralGlow")
-local fsKC=Instance.new("UICorner"); fsKC.CornerRadius=UDim.new(1,0); fsKC.Parent=fsKn
-local fsKS=Instance.new("UIStroke"); fsKS.Color=Color3.fromRGB(255,255,255); fsKS.Thickness=1; fsKS.Transparency=0.52; fsKS.Parent=fsKn
-local fsKSh=Instance.new("Frame"); fsKSh.Size=UDim2.new(0.5,0,0,2); fsKSh.Position=UDim2.new(0.18,0,0,2)
-fsKSh.BackgroundColor3=Color3.fromRGB(255,255,255); fsKSh.BackgroundTransparency=0.42; fsKSh.BorderSizePixel=0; fsKSh.ZIndex=7; fsKSh.Parent=fsKn
-local fsKShC=Instance.new("UICorner"); fsKShC.CornerRadius=UDim.new(1,0); fsKShC.Parent=fsKSh
-local fsDg=false
-local function fsUpd(pos)
-    local r=math.clamp((pos.X-fsTrk.AbsolutePosition.X)/fsTrk.AbsoluteSize.X,0,1)
-    local v=math.floor(FLY_MIN+r*(FLY_MAX-FLY_MIN)+0.5); local sr=(v-FLY_MIN)/(FLY_MAX-FLY_MIN)
-    fsFl.Size=UDim2.new(sr,0,1,0); fsKn.Position=UDim2.new(sr,-7,0.5,-7)
-    flySpeed=v; flySpeedLbl.Text=v.." st/s"
-end
-fsKn.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then fsDg=true end end)
-fsTrk.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then fsDg=true; fsUpd(i.Position) end end)
-UserInputService.InputChanged:Connect(function(i) if fsDg and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then fsUpd(i.Position) end end)
-UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then fsDg=false end end)
-
--- ── FLY LOGIC ──────────────────────────────
-local function enableFly()
-    if freecamActive then return end  -- jangan fly saat freecam aktif
-    local char = Player.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local h   = char:FindFirstChildOfClass("Humanoid")
-    if not hrp or not h then return end
-
-    flyActive = true
-    h.PlatformStand = true
-
-    -- Hapus lama jika ada
-    if flyBodyVelocity then flyBodyVelocity:Destroy() end
-    if flyBodyGyro     then flyBodyGyro:Destroy()     end
-
-    flyBodyVelocity = Instance.new("BodyVelocity")
-    flyBodyVelocity.Velocity  = Vector3.new(0,0,0)
-    flyBodyVelocity.MaxForce  = Vector3.new(1e5,1e5,1e5)
-    flyBodyVelocity.P         = 1e4
-    flyBodyVelocity.Parent    = hrp
-
-    flyBodyGyro = Instance.new("BodyGyro")
-    flyBodyGyro.MaxTorque = Vector3.new(1e5,1e5,1e5)
-    flyBodyGyro.P         = 1e4
-    flyBodyGyro.CFrame    = hrp.CFrame
-    flyBodyGyro.Parent    = hrp
-
-    flyToggleLbl.Text="FLY  ON"; flyToggleLbl.TextColor3=CFG.CoralGlow
-    flyToggleSub.TextColor3=CFG.CoralGlow
-    TweenService:Create(flyLED,TweenInfo.new(0.18),{BackgroundColor3=CFG.Coral}):Play()
-    TweenService:Create(flyCard,TweenInfo.new(0.18),{BackgroundColor3=Color3.fromRGB(20,10,0)}):Play()
-end
-
-local function disableFly()
-    flyActive = false
-    if flyBodyVelocity then flyBodyVelocity:Destroy(); flyBodyVelocity=nil end
-    if flyBodyGyro     then flyBodyGyro:Destroy();     flyBodyGyro=nil     end
-    local char = Player.Character
-    if char then
-        local h = char:FindFirstChildOfClass("Humanoid")
-        if h then h.PlatformStand=false; h.WalkSpeed=runSpeedValue end
-    end
-    flyToggleLbl.Text="FLY  OFF"; flyToggleLbl.TextColor3=CFG.CreamDim
-    flyToggleSub.TextColor3=CFG.CreamDim
-    TweenService:Create(flyLED,TweenInfo.new(0.18),{BackgroundColor3=Color3.fromRGB(45,25,0)}):Play()
-    TweenService:Create(flyCard,TweenInfo.new(0.18),{BackgroundColor3=CFG.BgCard}):Play()
-end
-
-flyClick.MouseButton1Click:Connect(function()
-    if flyActive then disableFly() else enableFly() end
-end)
 local hiddenGuis={}
 local function hideOthers()
     for _,g in ipairs(PlayerGui:GetChildren()) do
-        if g:IsA("ScreenGui") and g.Name~="WiraProFreecam" and g.Name~="WiraProGrid" and g.Name~="WiraProESP" and g.Enabled then
+        if g:IsA("ScreenGui") and g.Name~="WiraProFreecam" and g.Name~="WiraProGrid" and g.Name~="WiraProESP" and g.Name~="WiraProFly" and g.Enabled then
             g.Enabled=false; table.insert(hiddenGuis,g)
         end
     end
@@ -1381,23 +1409,24 @@ end
 -- FREECAM ENABLE / DISABLE
 -- ══════════════════════════════════════════
 local function enableFreecam()
-    if flyActive then disableFly() end   -- matikan fly dulu sebelum freecam ON
+    -- Matikan fly jika aktif sebelum freecam
+    if flyActive then
+        flyActive = false
+        local ch = Player.Character
+        if ch then
+            local h = ch:FindFirstChildOfClass("Humanoid")
+            if h then h.PlatformStand = false; h.WalkSpeed = 16; h.JumpPower = 50 end
+        end
+        if flyBV then flyBV:Destroy(); flyBV = nil end
+        if flyBG then flyBG:Destroy(); flyBG = nil end
+    end
     freecamActive=true; savedCamType=Camera.CameraType; savedFOV=Camera.FieldOfView
     Camera.CameraType=Enum.CameraType.Scriptable
     camCF=Camera.CFrame; targetCF=camCF; camPos=camCF.Position
     local lk=camCF.LookVector; yaw=math.atan2(-lk.X,-lk.Z); pitch=math.asin(lk.Y); roll=0
     curFOV=Camera.FieldOfView; tgtFOV=curFOV
     local ch=Player.Character
-    if ch then
-        local h=ch:FindFirstChildOfClass("Humanoid")
-        local hrp=ch:FindFirstChild("HumanoidRootPart")
-        if h then
-            h.WalkSpeed=0; h.JumpPower=0
-            pcall(function() h.JumpHeight=0 end)   -- API baru Roblox
-            h.AutoRotate=false
-        end
-        if hrp then hrp.Anchored=true end           -- ← FIX UTAMA: kunci posisi karakter
-    end
+    if ch then local h=ch:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed=0; h.JumpPower=0 end end
     local tgt=orbitTarget or Player
     if tgt and tgt.Character then
         local root=tgt.Character:FindFirstChild("HumanoidRootPart")
@@ -1413,16 +1442,7 @@ end
 local function disableFreecam()
     freecamActive=false; Camera.CameraType=savedCamType or Enum.CameraType.Custom; Camera.FieldOfView=savedFOV
     local ch=Player.Character
-    if ch then
-        local h=ch:FindFirstChildOfClass("Humanoid")
-        local hrp=ch:FindFirstChild("HumanoidRootPart")
-        if h then
-            h.WalkSpeed=runSpeedValue; h.JumpPower=50
-            pcall(function() h.JumpHeight=7.2 end)  -- kembalikan ke default Roblox
-            h.AutoRotate=true
-        end
-        if hrp then hrp.Anchored=false end           -- ← lepas kunci posisi karakter
-    end
+    if ch then local h=ch:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed=16; h.JumpPower=50 end end
     showOthers()
     ToggleLbl.Text="FREECAM  OFF"; ToggleLbl.TextColor3=CFG.CreamDim
     ToggleSub.Text="tap to activate"; ToggleSub.TextColor3=CFG.CreamDim
@@ -1535,7 +1555,7 @@ end)
 local EspGui=Instance.new("ScreenGui")
 EspGui.Name="WiraProESP"; EspGui.ResetOnSpawn=false
 EspGui.DisplayOrder=1000; EspGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-EspGui.Parent=game:GetService("CoreGui")
+EspGui.Parent=PlayerGui
 
 local function createEspLabel(p)
     if espLabels[p] then return end
@@ -1621,38 +1641,6 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ══════════════════════════════════════════
--- FLY RENDER LOOP
--- ══════════════════════════════════════════
-RunService.RenderStepped:Connect(function(dt)
-    if not flyActive or freecamActive then return end
-    local char = Player.Character
-    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp or not flyBodyVelocity then return end
-
-    local camCF2   = Camera.CFrame
-    local mi       = Vector3.new(0,0,0)
-    -- Horizontal dari arah kamera (proyeksikan ke XZ saja)
-    local fwd      = Vector3.new(camCF2.LookVector.X, 0, camCF2.LookVector.Z)
-    local right    = Vector3.new(camCF2.RightVector.X, 0, camCF2.RightVector.Z)
-    if fwd.Magnitude  > 0 then fwd   = fwd.Unit   end
-    if right.Magnitude > 0 then right = right.Unit end
-
-    if UserInputService:IsKeyDown(Enum.KeyCode.W) or UserInputService:IsKeyDown(Enum.KeyCode.Up)    then mi = mi + fwd   end
-    if UserInputService:IsKeyDown(Enum.KeyCode.S) or UserInputService:IsKeyDown(Enum.KeyCode.Down)  then mi = mi - fwd   end
-    if UserInputService:IsKeyDown(Enum.KeyCode.D) or UserInputService:IsKeyDown(Enum.KeyCode.Right) then mi = mi + right  end
-    if UserInputService:IsKeyDown(Enum.KeyCode.A) or UserInputService:IsKeyDown(Enum.KeyCode.Left)  then mi = mi - right  end
-    if UserInputService:IsKeyDown(Enum.KeyCode.E) or UserInputService:IsKeyDown(Enum.KeyCode.Space) then mi = mi + Vector3.new(0,1,0) end
-    if UserInputService:IsKeyDown(Enum.KeyCode.Q)                                                    then mi = mi - Vector3.new(0,1,0) end
-
-    if mi.Magnitude > 0 then mi = mi.Unit end
-    flyBodyVelocity.Velocity = mi * flySpeed
-
-    -- Gyro ikut arah kamera (horizontal) supaya karakter tidak aneh
-    local yawOnly = CFrame.new(hrp.Position) * CFrame.Angles(0, math.atan2(-camCF2.LookVector.X, -camCF2.LookVector.Z), 0)
-    flyBodyGyro.CFrame = yawOnly
-end)
-
--- ══════════════════════════════════════════
 -- RENDER LOOP
 -- ══════════════════════════════════════════
 RunService.RenderStepped:Connect(function(dt)
@@ -1696,44 +1684,15 @@ RunService.RenderStepped:Connect(function(dt)
     Camera.CFrame=camCF; Camera.FieldOfView=math.clamp(curFOV,CFG.MinFOV,CFG.MaxFOV)
 end)
 
-Player.CharacterRemoving:Connect(function(char)
-    -- Lepas anchor sebelum karakter di-remove agar tidak carry-over
-    local hrp=char:FindFirstChild("HumanoidRootPart")
-    if hrp then hrp.Anchored=false end
-    -- Bersihkan fly objects (sudah ter-destroy bersama karakter)
-    flyBodyVelocity=nil; flyBodyGyro=nil
+Player.CharacterRemoving:Connect(function()
     if freecamActive then disableFreecam() end
-end)
-
-Player.CharacterAdded:Connect(function(char)
-    -- Reset fly body objects (sudah di-destroy saat karakter lama removed)
-    flyBodyVelocity = nil; flyBodyGyro = nil
-    if flyActive then
-        -- Karakter baru: pasang kembali fly setelah sedikit delay
-        task.wait(0.5)
-        flyActive = false  -- reset dulu agar enableFly berjalan bersih
-        enableFly()
-    end
-    -- Pastikan karakter baru tidak ikut ter-anchor jika freecam masih aktif
-    local hrp=char:WaitForChild("HumanoidRootPart",5)
-    if hrp and freecamActive then
-        hrp.Anchored=true
-        local h=char:FindFirstChildOfClass("Humanoid")
-        if h then h.WalkSpeed=0; h.JumpPower=0; pcall(function() h.JumpHeight=0 end); h.AutoRotate=false end
-    end
-    -- Terapkan run speed setelah spawn
-    local h=char:FindFirstChildOfClass("Humanoid")
-    if h and not freecamActive and not flyActive then
-        task.wait(0.2); h.WalkSpeed=runSpeedValue
-    end
 end)
 
 task.spawn(function()
     task.wait(0.1)
-    print("✦ WiraPro FREECAM V3.0  [Y2K Glass · Orbit · Teleport · ESP · Fullbright · Camera Grid · Colour Theme · Run Speed · Fly]")
+    print("✦ WiraPro FREECAM V3.0  [Y2K Glass · Orbit · Teleport · ESP · Fullbright · Camera Grid · Fly · Colour Theme]")
     print("  FREE  : WASD+Q/E gerak | RMB rotate")
-    print("  FLY   : Tap kartu FLY → ON · WASD gerak · E/Space naik · Q turun")
-    print("  SPEED : Slider di kartu RUN SPEED (1–500 WalkSpeed)")
+    print("  FLY   : Aktifkan FLY SCRIPT di panel → arahkan kamera = arah terbang")
     print("  ORBIT : Isi UserId/Username → CARI → ORBIT")
     print("  ESP   : Tap kartu ESP untuk ON/OFF")
     print("  THEME : Scroll bawah → COLOUR THEME → 5 tema (Ember/Ocean/Jade/Void/Sakura)")
