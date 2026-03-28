@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║   WiraPro FREECAM V2.9  +  Cinematic Edition            ║
+-- ║   WiraPro FREECAM V3.2  +  Cinematic Edition            ║
 -- ║   Y2K Glass · FreeCam · Orbit · Teleport · ESP          ║
--- ║   + Cinematic Shots · Camera Direction (Front/Back)      ║
--- ║   + UI Persistence Guard · Colour Theme (5 tema)        ║
+-- ║   + Cinematic Shots · Direction (Front/Back)             ║
+-- ║   + Shared Speed/Radius/Height · Auto-hide UI on Shot   ║
 -- ╚══════════════════════════════════════════════════════════╝
 -- StarterPlayer → StarterPlayerScripts  (LocalScript)
 
@@ -140,14 +140,10 @@ local espActive=false; local espLabels={}
 -- ══════════════════════════════════════════
 local CIN = {
     Facing   = "Front",
-    Radius   = 15,
-    Height   = 5,
-    Speed    = 5,
     Playing  = false,
     Conn     = nil,
     ActiveKey= nil,
 }
-local CIN_DEF = { Radius=15, Height=5, Speed=5 }
 local ShotBtns = {}
 
 -- ══════════════════════════════════════════
@@ -550,7 +546,7 @@ makeButton(efRow,"Fish Eye",UDim2.new(0.5,-3,1,0),nil,function() tgtFOV=CFG.Fish
 -- ══════════════════════════════════════════
 -- ORBIT CAM SETTING CARD
 -- ══════════════════════════════════════════
-local orbitCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,218),nil,"OrbitCard",UDim.new(0,12),0.68)
+local orbitCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,232),nil,"OrbitCard",UDim.new(0,12),0.68)
 orbitCard.BackgroundColor3=CFG.BgCard; reg(orbitCard,"BackgroundColor3","BgCard")
 orbitCard.LayoutOrder=2
 
@@ -591,6 +587,9 @@ local sepLine=Instance.new("Frame"); sepLine.Size=UDim2.new(1,-16,0,1); sepLine.
 sepLine.BackgroundColor3=CFG.CoralDim; sepLine.BackgroundTransparency=0.55; sepLine.BorderSizePixel=0; sepLine.Parent=orbitCard
 reg(sepLine,"BackgroundColor3","CoralDim")
 
+-- Label: slider ini dipakai juga oleh Cinematic Shots
+makeLabel(orbitCard,"Speed / Radius / Height — dipakai Orbit & Cinematic Shot",UDim2.new(1,-16,0,11),UDim2.new(0,8,0,112),7,false,CFG.CoralGlow,Enum.TextXAlignment.Left)
+
 local function miniSlider(lbl,mn,mx,def,yOff,onChange)
     makeLabel(orbitCard,lbl,UDim2.new(0.55,0,0,13),UDim2.new(0,8,0,yOff),9,false,CFG.CreamDim,Enum.TextXAlignment.Left)
     local vL=makeLabel(orbitCard,tostring(def),UDim2.new(0.45,-8,0,13),UDim2.new(0.55,0,0,yOff),9,true,CFG.Cream,Enum.TextXAlignment.Right)
@@ -626,9 +625,9 @@ local function miniSlider(lbl,mn,mx,def,yOff,onChange)
     UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dg=false end end)
     return rst
 end
-local resetOrbitSpd=miniSlider("Speed",  1,100,50,114,function(v) CFG.OrbitSpeed=v*0.01 end)
-local resetOrbitRad=miniSlider("Radius", 4, 50,12,148,function(v) CFG.OrbitRadius=v end)
-local resetOrbitH  =miniSlider("Height",-10,20, 4,182,function(v) CFG.OrbitHeight=v end)
+local resetOrbitSpd=miniSlider("Speed",  1,100,50,127,function(v) CFG.OrbitSpeed=v*0.01 end)
+local resetOrbitRad=miniSlider("Radius", 4, 50,12,161,function(v) CFG.OrbitRadius=v end)
+local resetOrbitH  =miniSlider("Height",-10,20, 4,195,function(v) CFG.OrbitHeight=v end)
 
 local function resetOrbitTarget()
     orbitTarget=nil; orbitStatusLbl.Text="Diri sendiri"
@@ -839,7 +838,7 @@ BStopCin.BackgroundColor3 = Color3.fromRGB(60,60,80)
 -- ══════════════════════════════════════════
 -- 📷 ARAH KAMERA CARD  ← NEW
 -- ══════════════════════════════════════════
-local dirCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,120),nil,"DirCard",UDim.new(0,12),0.68)
+local dirCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,80),nil,"DirCard",UDim.new(0,12),0.68)
 dirCard.BackgroundColor3=CFG.BgCard; reg(dirCard,"BackgroundColor3","BgCard")
 dirCard.LayoutOrder=81
 
@@ -850,33 +849,7 @@ makeLabel(dirCard,"Posisi kamera relatif terhadap target",UDim2.new(1,-16,0,12),
 local dirBtnFront = makeButton(dirCard,"▶  Depan (Front)",UDim2.new(0.5,-6,0,30),UDim2.new(0,8,0,36))
 local dirBtnBack  = makeButton(dirCard,"◀  Belakang (Back)",UDim2.new(0.5,-6,0,30),UDim2.new(0.5,0,0,36))
 
--- Cinematic settings sliders in dirCard
-makeLabel(dirCard,"Radius",UDim2.new(0.55,0,0,13),UDim2.new(0,8,0,74),9,false,CFG.CreamDim,Enum.TextXAlignment.Left)
-local cinRadVL=makeLabel(dirCard,"15",UDim2.new(0.45,-8,0,13),UDim2.new(0.55,0,0,74),9,true,CFG.Cream,Enum.TextXAlignment.Right)
-local cinRadTrk=Instance.new("Frame"); cinRadTrk.Size=UDim2.new(1,-16,0,4); cinRadTrk.Position=UDim2.new(0,8,0,89)
-cinRadTrk.BackgroundColor3=CFG.BgBase; cinRadTrk.BackgroundTransparency=0.38; cinRadTrk.BorderSizePixel=0; cinRadTrk.Parent=dirCard
-reg(cinRadTrk,"BackgroundColor3","BgBase")
-local cinRadTC=Instance.new("UICorner"); cinRadTC.CornerRadius=UDim.new(1,0); cinRadTC.Parent=cinRadTrk
-local cinRadFill=Instance.new("Frame"); cinRadFill.Size=UDim2.new((15-3)/(60-3),0,1,0)
-cinRadFill.BackgroundColor3=CFG.Coral; cinRadFill.BackgroundTransparency=0.20; cinRadFill.BorderSizePixel=0; cinRadFill.Parent=cinRadTrk
-reg(cinRadFill,"BackgroundColor3","Coral")
-local cinRadFC=Instance.new("UICorner"); cinRadFC.CornerRadius=UDim.new(1,0); cinRadFC.Parent=cinRadFill
-local cinRadKn=Instance.new("Frame"); cinRadKn.Size=UDim2.new(0,12,0,12); cinRadKn.Position=UDim2.new((15-3)/(60-3),-6,0.5,-6)
-cinRadKn.BackgroundColor3=CFG.CoralGlow; cinRadKn.BackgroundTransparency=0.10; cinRadKn.BorderSizePixel=0; cinRadKn.ZIndex=6; cinRadKn.Parent=cinRadTrk
-reg(cinRadKn,"BackgroundColor3","CoralGlow")
-local cinRadKC=Instance.new("UICorner"); cinRadKC.CornerRadius=UDim.new(1,0); cinRadKC.Parent=cinRadKn
-local cinRadKS=Instance.new("UIStroke"); cinRadKS.Color=Color3.fromRGB(255,255,255); cinRadKS.Thickness=1; cinRadKS.Transparency=0.55; cinRadKS.Parent=cinRadKn
-local cinRadDg=false
-local function cinRadUpd(pos)
-    local r=math.clamp((pos.X-cinRadTrk.AbsolutePosition.X)/cinRadTrk.AbsoluteSize.X,0,1)
-    local v=math.floor(3+r*(60-3)+0.5); local sr=(v-3)/(60-3)
-    cinRadFill.Size=UDim2.new(sr,0,1,0); cinRadKn.Position=UDim2.new(sr,-6,0.5,-6)
-    cinRadVL.Text=tostring(v); CIN.Radius=v
-end
-cinRadKn.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then cinRadDg=true end end)
-cinRadTrk.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then cinRadDg=true; cinRadUpd(i.Position) end end)
-UserInputService.InputChanged:Connect(function(i) if cinRadDg and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then cinRadUpd(i.Position) end end)
-UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then cinRadDg=false end end)
+-- Cinematic settings: Radius & Height & Speed diambil dari Orbit sliders (CFG.OrbitRadius / CFG.OrbitHeight / CFG.OrbitSpeed)
 
 -- Direction button highlight logic
 local function updateDirHL()
@@ -1041,16 +1014,20 @@ end
 
 local function CinLK()
     local root = CinGetRoot(); if not root then return Vector3.new() end
-    return root.Position + Vector3.new(0, CIN.Height*0.52, 0)
+    return root.Position + Vector3.new(0, CFG.OrbitHeight*0.52, 0)
 end
 
 local function CinEO3(t) return 1-(1-t)^3 end
 local function CinEIS(t) return -(math.cos(math.pi*t)-1)/2 end
-local function CinD(b)   return b*(5/math.max(CIN.Speed,1)) end
+-- Speed slider (0.01–1.0): nilai tinggi = shot lebih cepat
+local function CinD(b)   return b*(5/math.max(CFG.OrbitSpeed*10,1)) end
 
 local function CinStopShot()
     CIN.Playing = false
     if CIN.Conn then CIN.Conn:Disconnect(); CIN.Conn = nil end
+    -- Kembalikan panel WiraPro
+    MainPanel.Visible = true
+    TweenService:Create(MainPanel,TweenInfo.new(0.30,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundTransparency=0.60}):Play()
     if freecamActive then
         -- Serahkan kembali kontrol ke freecam
         camCF = Camera.CFrame; targetCF = camCF; camPos = camCF.Position
@@ -1076,6 +1053,9 @@ local function CinStartShot(k, fn)
     if ShotBtns[k] then
         TweenService:Create(ShotBtns[k],TweenInfo.new(0.10),{BackgroundTransparency=0.10}):Play()
     end
+    -- Sembunyikan panel WiraPro saat shot aktif
+    TweenService:Create(MainPanel,TweenInfo.new(0.25,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{BackgroundTransparency=1.0}):Play()
+    task.delay(0.25, function() if CIN.Playing then MainPanel.Visible = false end end)
     fn()
 end
 
@@ -1086,8 +1066,8 @@ local function RunDroneIn()
         if not CIN.Playing then return end
         local root=CinGetRoot(); if not root then return end
         local t=math.clamp((tick()-t0)/dur,0,1); local e=CinEO3(t)
-        local rad=CIN.Radius*2.5+(CIN.Radius*0.4-CIN.Radius*2.5)*e
-        Camera.CFrame=CFrame.lookAt(root.Position+Vector3.new(0,CIN.Height,0)+CinCO(rad),CinLK())
+        local rad=CFG.OrbitRadius*2.5+(CFG.OrbitRadius*0.4-CFG.OrbitRadius*2.5)*e
+        Camera.CFrame=CFrame.lookAt(root.Position+Vector3.new(0,CFG.OrbitHeight,0)+CinCO(rad),CinLK())
         Camera.FieldOfView=tgtFOV; if t>=1 then CinStopShot() end
     end)
 end
@@ -1099,8 +1079,8 @@ local function RunDroneOut()
         if not CIN.Playing then return end
         local root=CinGetRoot(); if not root then return end
         local t=math.clamp((tick()-t0)/dur,0,1); local e=CinEO3(t)
-        local rad=CIN.Radius*0.4+(CIN.Radius*2.5-CIN.Radius*0.4)*e
-        Camera.CFrame=CFrame.lookAt(root.Position+Vector3.new(0,CIN.Height,0)+CinCO(rad),CinLK())
+        local rad=CFG.OrbitRadius*0.4+(CFG.OrbitRadius*2.5-CFG.OrbitRadius*0.4)*e
+        Camera.CFrame=CFrame.lookAt(root.Position+Vector3.new(0,CFG.OrbitHeight,0)+CinCO(rad),CinLK())
         Camera.FieldOfView=tgtFOV; if t>=1 then CinStopShot() end
     end)
 end
@@ -1113,7 +1093,7 @@ local function RunOrbit360()
         local root=CinGetRoot(); if not root then return end
         ang=ang+(360/dur)*dt; local r=math.rad(ang)
         Camera.CFrame=CFrame.lookAt(
-            root.Position+Vector3.new(math.sin(r)*CIN.Radius,CIN.Height,math.cos(r)*CIN.Radius),
+            root.Position+Vector3.new(math.sin(r)*CFG.OrbitRadius,CFG.OrbitHeight,math.cos(r)*CFG.OrbitRadius),
             CinLK())
         Camera.FieldOfView=tgtFOV; if ang>=360 then CinStopShot() end
     end)
@@ -1126,9 +1106,9 @@ local function RunCinPan()
         if not CIN.Playing then return end
         local root=CinGetRoot(); if not root then return end
         local t=math.clamp((tick()-t0)/dur,0,1); local e=CinEIS(t)
-        local pan=root.CFrame.RightVector*(CIN.Radius*1.5*(e*2-1))
+        local pan=root.CFrame.RightVector*(CFG.OrbitRadius*1.5*(e*2-1))
         Camera.CFrame=CFrame.lookAt(
-            root.Position+Vector3.new(0,CIN.Height,0)+CinCO(CIN.Radius)+pan,
+            root.Position+Vector3.new(0,CFG.OrbitHeight,0)+CinCO(CFG.OrbitRadius)+pan,
             CinLK())
         Camera.FieldOfView=tgtFOV; if t>=1 then CinStopShot() end
     end)
@@ -1141,7 +1121,7 @@ local function RunReveal()
         if not CIN.Playing then return end
         local root=CinGetRoot(); if not root then return end
         local t=math.clamp((tick()-t0)/dur,0,1); local e=CinEO3(t)
-        local cy=(root.Position.Y-3.5)+7*e; local off=CinCO(CIN.Radius)
+        local cy=(root.Position.Y-3.5)+7*e; local off=CinCO(CFG.OrbitRadius)
         Camera.CFrame=CFrame.lookAt(
             Vector3.new(root.Position.X+off.X,cy,root.Position.Z+off.Z),
             Vector3.new(root.Position.X,cy,root.Position.Z))
@@ -1149,31 +1129,53 @@ local function RunReveal()
     end)
 end
 
--- Dolly Zoom IN
+-- Dolly Zoom IN — kamera maju, FOV melebar → background "menghantam" (vertigo)
+-- FIX: interpolasi FOV langsung (bukan radius), radius dihitung dari K agar
+--      ukuran subject di layar benar-benar konstan sepanjang shot.
 local function RunDollyIn()
-    local dur=CinD(7); local rS=CIN.Radius*2.2; local rE=CIN.Radius*0.45
-    local fR=math.clamp(tgtFOV,25,110); local K=math.tan(math.rad(fR)/2)*rE; local t0=tick()
-    CIN.Conn=RunService.RenderStepped:Connect(function()
+    local dur     = CinD(8)
+    local fovEnd  = math.clamp(tgtFOV, 35, 90)
+    local fovStart = 16          -- super-narrow: kamera sangat zoomed-in di awal
+    -- K = rEnd * tan(fovEnd/2) → subject apparent size tetap konstan
+    local rEnd = math.max(CFG.OrbitRadius * 0.75, 2.5)
+    local K    = rEnd * math.tan(math.rad(fovEnd) / 2)
+    local t0   = tick()
+    CIN.Conn = RunService.RenderStepped:Connect(function()
         if not CIN.Playing then return end
-        local root=CinGetRoot(); if not root then return end
-        local t=math.clamp((tick()-t0)/dur,0,1); local e=CinEIS(t); local rad=rS+(rE-rS)*e
-        Camera.CFrame=CFrame.lookAt(root.Position+Vector3.new(0,CIN.Height,0)+CinCO(rad),CinLK())
-        Camera.FieldOfView=math.clamp(math.deg(2*math.atan(K/rad)),20,120)
-        if t>=1 then Camera.FieldOfView=fR; CinStopShot() end
+        local root = CinGetRoot(); if not root then return end
+        local t   = math.clamp((tick() - t0) / dur, 0, 1)
+        local e   = CinEIS(t)
+        -- ✔ FOV diinterpolasi → perubahan zoom merata di seluruh durasi
+        local fov = fovStart + (fovEnd - fovStart) * e
+        -- ✔ Radius dihitung dari K agar ukuran subject konstan di layar
+        local rad = K / math.tan(math.rad(fov) / 2)
+        -- ✔ Look target di head-level tetap (tidak ikut OrbitHeight)
+        local lookPt = root.Position + Vector3.new(0, 1.5, 0)
+        Camera.CFrame      = CFrame.lookAt(lookPt + CinCO(rad) + Vector3.new(0, CFG.OrbitHeight * 0.35, 0), lookPt)
+        Camera.FieldOfView = math.clamp(fov, 10, 120)
+        if t >= 1 then Camera.FieldOfView = fovEnd; CinStopShot() end
     end)
 end
 
--- Dolly Zoom OUT
+-- Dolly Zoom OUT — kamera mundur, FOV menyempit → background "kabur menjauh" (vertigo)
 local function RunDollyOut()
-    local dur=CinD(7); local rS=CIN.Radius*0.45; local rE=CIN.Radius*2.2
-    local fR=math.clamp(tgtFOV,25,110); local K=math.tan(math.rad(fR)/2)*rS; local t0=tick()
-    CIN.Conn=RunService.RenderStepped:Connect(function()
+    local dur      = CinD(8)
+    local fovStart = math.clamp(tgtFOV, 35, 90)
+    local fovEnd   = 16          -- super-narrow: kamera sangat zoomed-in di akhir
+    local rStart   = math.max(CFG.OrbitRadius * 0.75, 2.5)
+    local K        = rStart * math.tan(math.rad(fovStart) / 2)
+    local t0       = tick()
+    CIN.Conn = RunService.RenderStepped:Connect(function()
         if not CIN.Playing then return end
-        local root=CinGetRoot(); if not root then return end
-        local t=math.clamp((tick()-t0)/dur,0,1); local e=CinEIS(t); local rad=rS+(rE-rS)*e
-        Camera.CFrame=CFrame.lookAt(root.Position+Vector3.new(0,CIN.Height,0)+CinCO(rad),CinLK())
-        Camera.FieldOfView=math.clamp(math.deg(2*math.atan(K/rad)),20,120)
-        if t>=1 then Camera.FieldOfView=fR; CinStopShot() end
+        local root = CinGetRoot(); if not root then return end
+        local t   = math.clamp((tick() - t0) / dur, 0, 1)
+        local e   = CinEIS(t)
+        local fov = fovStart + (fovEnd - fovStart) * e
+        local rad = K / math.tan(math.rad(fov) / 2)
+        local lookPt = root.Position + Vector3.new(0, 1.5, 0)
+        Camera.CFrame      = CFrame.lookAt(lookPt + CinCO(rad) + Vector3.new(0, CFG.OrbitHeight * 0.35, 0), lookPt)
+        Camera.FieldOfView = math.clamp(fov, 10, 120)
+        if t >= 1 then Camera.FieldOfView = fovEnd; CinStopShot() end
     end)
 end
 
@@ -1484,11 +1486,12 @@ end)
 
 task.spawn(function()
     task.wait(0.1)
-    print("✦ WiraPro FREECAM V2.9 + Cinematic Edition — Ready")
+    print("✦ WiraPro FREECAM V3.1 + Cinematic Edition — Ready")
     print("  FREE     : WASD+Q/E gerak | RMB rotate")
     print("  ORBIT    : Isi UserId/Username → CARI → ORBIT")
     print("  CINEMATIC: Scroll ke '🎬 CINEMATIC SHOTS' → pilih shot → play")
     print("  ARAH     : Scroll ke '📷 ARAH KAMERA' → toggle Depan/Belakang")
+    print("  SHARED   : Speed/Radius/Height di Orbit Card = dipakai juga oleh Cinematic")
     print("  ESP      : Tap kartu ESP untuk ON/OFF")
     print("  THEME    : Scroll bawah → COLOUR THEME → 5 tema")
     print("  Color Registry entries: "..#colorRegistry)
