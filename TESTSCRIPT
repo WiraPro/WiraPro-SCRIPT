@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║   WiraPro FREECAM V3.2  +  Cinematic Edition            ║
+-- ║   WiraPro FREECAM V3.6  +  Cinematic Edition            ║
 -- ║   Y2K Glass · FreeCam · Orbit · Teleport · ESP          ║
 -- ║   + Cinematic Shots · Direction (Front/Back)             ║
 -- ║   + Shared Speed/Radius/Height · Auto-hide UI on Shot   ║
@@ -145,6 +145,9 @@ local CIN = {
     ActiveKey= nil,
 }
 local ShotBtns = {}
+-- Forward declarations — diisi setelah run-functions didefinisikan
+local CinStartShot  -- function(k, fn)
+local ShotFns = {}  -- populated after Run* functions defined
 
 -- ══════════════════════════════════════════
 -- SCREENGUI
@@ -805,7 +808,7 @@ local espToggleSub=makeLabel(espCard,"nama & jarak player",UDim2.new(1,-50,0,14)
 -- ══════════════════════════════════════════
 -- 🎬 CINEMATIC SHOTS CARD  ← NEW
 -- ══════════════════════════════════════════
-local cinH = 8 + 7*38 + 10 + 38 + 8  -- label + 7 shot btns + gap + stop btn + padding
+local cinH = 36 + 9*46 + 12 + 36 + 10  -- header + 9 shot btns (46px each) + gap + stop btn + padding
 local cinCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,cinH),nil,"CinCard",UDim.new(0,12),0.68)
 cinCard.BackgroundColor3=CFG.BgCard; reg(cinCard,"BackgroundColor3","BgCard")
 cinCard.LayoutOrder=8
@@ -814,25 +817,101 @@ makeLabel(cinCard,"🎬  CINEMATIC SHOTS",UDim2.new(1,-16,0,14),UDim2.new(0,8,0,
 makeLabel(cinCard,"(pakai target orbit / diri sendiri)",UDim2.new(1,-16,0,12),UDim2.new(0,8,0,19),7,false,CFG.CreamDim,Enum.TextXAlignment.Left)
 
 local SHOT_LIST = {
-    {k="DroneIn",  n="🚁  Drone Zoom IN   ·  maju mendekati target"},
-    {k="DroneOut", n="🚁  Drone Zoom OUT  ·  mundur menjauhi target"},
-    {k="Orbit360", n="🔄  Orbit 360°      ·  berputar mengelilingi target"},
-    {k="CinPan",   n="🎥  Cinematic Pan   ·  geser kiri → kanan"},
-    {k="Reveal",   n="⬆️  Reveal Up       ·  dari kaki ke kepala"},
-    {k="DollyIn",  n="🌀  Dolly Zoom IN   ·  maju + FOV kecil (vertigo)"},
-    {k="DollyOut", n="🌀  Dolly Zoom OUT  ·  mundur + FOV lebar (vertigo)"},
+    {k="DroneIn",    ico="🚁", name="Drone Zoom IN",   desc="maju mendekati target"},
+    {k="DroneOut",   ico="🚁", name="Drone Zoom OUT",  desc="mundur menjauhi target"},
+    {k="Orbit360",   ico="🔄", name="Orbit 360°",      desc="berputar mengelilingi target"},
+    {k="CinPan",     ico="🎥", name="Cinematic Pan",   desc="geser kiri → kanan"},
+    {k="CinPanRL",   ico="🎥", name="Cinematic Pan",   desc="geser kanan → kiri"},
+    {k="Reveal",     ico="⬆", name="Reveal Up",       desc="dari kaki ke kepala"},
+    {k="RevealDown", ico="⬇", name="Reveal Down",     desc="dari kepala ke kaki"},
+    {k="DollyIn",    ico="🌀", name="Dolly Zoom IN",   desc="maju · FOV sempit (vertigo)"},
+    {k="DollyOut",   ico="🌀", name="Dolly Zoom OUT",  desc="mundur · FOV lebar (vertigo)"},
 }
 
 local shotBtnY = 36
 for _, sd in ipairs(SHOT_LIST) do
-    local b = makeButton(cinCard, sd.n, UDim2.new(1,-16,0,30), UDim2.new(0,8,0,shotBtnY))
-    b.TextXAlignment = Enum.TextXAlignment.Left
-    b.Font = Enum.Font.Montserrat
-    ShotBtns[sd.k] = b
-    shotBtnY = shotBtnY + 34
+    -- Container frame (glass, rounded)
+    local btnF = Instance.new("Frame")
+    btnF.Size = UDim2.new(1,-16,0,40)
+    btnF.Position = UDim2.new(0,8,0,shotBtnY)
+    btnF.BackgroundColor3 = CFG.Coral
+    btnF.BackgroundTransparency = 0.72
+    btnF.BorderSizePixel = 0
+    btnF.Parent = cinCard
+    reg(btnF,"BackgroundColor3","Coral")
+    local bFC = Instance.new("UICorner"); bFC.CornerRadius = UDim.new(0,8); bFC.Parent = btnF
+    local bFS = Instance.new("UIStroke"); bFS.Color = CFG.CoralLight; bFS.Thickness = 1
+    bFS.Transparency = 0.45; bFS.Parent = btnF
+    reg(bFS,"Color","CoralLight")
+    -- Shine bar
+    local bSh = Instance.new("Frame"); bSh.Size = UDim2.new(0.50,0,0,1.5); bSh.Position = UDim2.new(0.10,0,0,4)
+    bSh.BackgroundColor3 = Color3.fromRGB(255,255,255); bSh.BackgroundTransparency = 0.52
+    bSh.BorderSizePixel = 0; bSh.ZIndex = 3; bSh.Parent = btnF
+    local bShC = Instance.new("UICorner"); bShC.CornerRadius = UDim.new(1,0); bShC.Parent = bSh
+    -- Left accent bar
+    local accent = Instance.new("Frame"); accent.Size = UDim2.new(0,3,0.65,0); accent.Position = UDim2.new(0,7,0.18,0)
+    accent.BackgroundColor3 = CFG.CoralGlow; accent.BackgroundTransparency = 0.20
+    accent.BorderSizePixel = 0; accent.ZIndex = 3; accent.Parent = btnF
+    reg(accent,"BackgroundColor3","CoralGlow")
+    local acC = Instance.new("UICorner"); acC.CornerRadius = UDim.new(1,0); acC.Parent = accent
+    -- Shot name label (bold, ESP style)
+    local nameLbl = Instance.new("TextLabel")
+    nameLbl.Size = UDim2.new(1,-18,0,18)
+    nameLbl.Position = UDim2.new(0,16,0,3)
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Text = sd.ico .. "  " .. sd.name
+    nameLbl.TextColor3 = CFG.Cream
+    nameLbl.TextSize = 11
+    nameLbl.Font = Enum.Font.MontserratBold
+    nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+    nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+    nameLbl.ZIndex = 3; nameLbl.Parent = btnF
+    reg(nameLbl,"TextColor3","Cream")
+    -- Description label (light, ESP style)
+    local descLbl = Instance.new("TextLabel")
+    descLbl.Size = UDim2.new(1,-18,0,14)
+    descLbl.Position = UDim2.new(0,16,0,21)
+    descLbl.BackgroundTransparency = 1
+    descLbl.Text = sd.desc
+    descLbl.TextColor3 = CFG.CreamDim
+    descLbl.TextSize = 9
+    descLbl.Font = Enum.Font.Montserrat
+    descLbl.TextXAlignment = Enum.TextXAlignment.Left
+    descLbl.TextTruncate = Enum.TextTruncate.AtEnd
+    descLbl.ZIndex = 3; descLbl.Parent = btnF
+    reg(descLbl,"TextColor3","CreamDim")
+    -- Invisible click button on top
+    local clickBtn = Instance.new("TextButton")
+    clickBtn.Size = UDim2.new(1,0,1,0); clickBtn.Position = UDim2.new(0,0,0,0)
+    clickBtn.BackgroundTransparency = 1; clickBtn.Text = ""
+    clickBtn.AutoButtonColor = false; clickBtn.ZIndex = 10; clickBtn.Parent = btnF
+    clickBtn.MouseEnter:Connect(function()
+        TweenService:Create(btnF,TweenInfo.new(0.10),{BackgroundTransparency=0.35}):Play()
+        TweenService:Create(nameLbl,TweenInfo.new(0.10),{TextColor3=CFG.OnCoral}):Play()
+    end)
+    clickBtn.MouseLeave:Connect(function()
+        TweenService:Create(btnF,TweenInfo.new(0.10),{BackgroundTransparency=0.72}):Play()
+        TweenService:Create(nameLbl,TweenInfo.new(0.10),{TextColor3=CFG.Cream}):Play()
+    end)
+    clickBtn.MouseButton1Down:Connect(function()
+        TweenService:Create(btnF,TweenInfo.new(0.05),{BackgroundTransparency=0.10}):Play()
+    end)
+    clickBtn.MouseButton1Up:Connect(function()
+        TweenService:Create(btnF,TweenInfo.new(0.08),{BackgroundTransparency=0.35}):Play()
+    end)
+    -- Store both frame and clickBtn in ShotBtns (tween targets frame)
+    ShotBtns[sd.k] = btnF
+    local capturedK = sd.k
+    clickBtn.MouseButton1Click:Connect(function()
+        -- ShotFns di-resolve saat click (bukan saat build), aman meski didefinisikan belakangan
+        if ShotFns and ShotFns[capturedK] then
+            CinStartShot(capturedK, ShotFns[capturedK])
+        end
+    end)
+    shotBtnY = shotBtnY + 46
 end
 
-local BStopCin = makeButton(cinCard,"⏹  STOP SHOT",UDim2.new(1,-16,0,30),UDim2.new(0,8,0,shotBtnY+4))
+local BStopCin = makeButton(cinCard,"⏹  STOP SHOT",UDim2.new(1,-16,0,30),UDim2.new(0,8,0,shotBtnY+6))
 BStopCin.BackgroundColor3 = Color3.fromRGB(60,60,80)
 
 -- ══════════════════════════════════════════
@@ -1022,30 +1101,35 @@ local function CinEIS(t) return -(math.cos(math.pi*t)-1)/2 end
 -- Speed slider (0.01–1.0): nilai tinggi = shot lebih cepat
 local function CinD(b)   return b*(5/math.max(CFG.OrbitSpeed*10,1)) end
 
-local function CinStopShot()
+
+local CinStopShot  -- forward declare agar bisa dipanggil dari CinStartShot
+CinStopShot = function()
     CIN.Playing = false
     if CIN.Conn then CIN.Conn:Disconnect(); CIN.Conn = nil end
     -- Kembalikan panel WiraPro
     MainPanel.Visible = true
     TweenService:Create(MainPanel,TweenInfo.new(0.30,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundTransparency=0.60}):Play()
     if freecamActive then
-        -- Serahkan kembali kontrol ke freecam
+        -- Freecam masih aktif: serahkan kontrol kembali ke freecam, UI game tetap tersembunyi
         camCF = Camera.CFrame; targetCF = camCF; camPos = camCF.Position
         local lk = camCF.LookVector
         yaw   = math.atan2(-lk.X, -lk.Z)
         pitch = math.asin(math.clamp(lk.Y, -1, 1))
         Camera.CameraType = Enum.CameraType.Scriptable
     else
+        -- Freecam tidak aktif: kembalikan kamera normal + tampilkan kembali semua UI game
         Camera.CameraType = Enum.CameraType.Custom
         Camera.FieldOfView = CFG.DefaultFOV
+        showOthers()
     end
     CIN.ActiveKey = nil
     for _, b in pairs(ShotBtns) do
-        TweenService:Create(b,TweenInfo.new(0.12),{BackgroundTransparency=0.58}):Play()
+        TweenService:Create(b,TweenInfo.new(0.12),{BackgroundTransparency=0.72}):Play()
     end
 end
 
-local function CinStartShot(k, fn)
+-- CinStartShot mengisi forward declaration dari atas
+CinStartShot = function(k, fn)
     CinStopShot()
     CIN.Playing = true
     Camera.CameraType = Enum.CameraType.Scriptable
@@ -1053,6 +1137,8 @@ local function CinStartShot(k, fn)
     if ShotBtns[k] then
         TweenService:Create(ShotBtns[k],TweenInfo.new(0.10),{BackgroundTransparency=0.10}):Play()
     end
+    -- Sembunyikan semua UI game (termasuk UI Roblox bawaan map)
+    hideOthers()
     -- Sembunyikan panel WiraPro saat shot aktif
     TweenService:Create(MainPanel,TweenInfo.new(0.25,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{BackgroundTransparency=1.0}):Play()
     task.delay(0.25, function() if CIN.Playing then MainPanel.Visible = false end end)
@@ -1099,7 +1185,7 @@ local function RunOrbit360()
     end)
 end
 
--- Cinematic Pan
+-- Cinematic Pan kiri → kanan
 local function RunCinPan()
     local t0,dur=tick(),CinD(6)
     CIN.Conn=RunService.RenderStepped:Connect(function()
@@ -1114,7 +1200,23 @@ local function RunCinPan()
     end)
 end
 
--- Reveal Up
+-- Cinematic Pan kanan → kiri (arah terbalik)
+local function RunCinPanRL()
+    local t0,dur=tick(),CinD(6)
+    CIN.Conn=RunService.RenderStepped:Connect(function()
+        if not CIN.Playing then return end
+        local root=CinGetRoot(); if not root then return end
+        local t=math.clamp((tick()-t0)/dur,0,1); local e=CinEIS(t)
+        -- RightVector negatif = mulai dari kanan, geser ke kiri
+        local pan=root.CFrame.RightVector*(CFG.OrbitRadius*1.5*((1-e)*2-1))
+        Camera.CFrame=CFrame.lookAt(
+            root.Position+Vector3.new(0,CFG.OrbitHeight,0)+CinCO(CFG.OrbitRadius)+pan,
+            CinLK())
+        Camera.FieldOfView=tgtFOV; if t>=1 then CinStopShot() end
+    end)
+end
+
+-- Reveal Up — kamera naik dari kaki ke kepala
 local function RunReveal()
     local t0,dur=tick(),CinD(4)
     CIN.Conn=RunService.RenderStepped:Connect(function()
@@ -1122,6 +1224,22 @@ local function RunReveal()
         local root=CinGetRoot(); if not root then return end
         local t=math.clamp((tick()-t0)/dur,0,1); local e=CinEO3(t)
         local cy=(root.Position.Y-3.5)+7*e; local off=CinCO(CFG.OrbitRadius)
+        Camera.CFrame=CFrame.lookAt(
+            Vector3.new(root.Position.X+off.X,cy,root.Position.Z+off.Z),
+            Vector3.new(root.Position.X,cy,root.Position.Z))
+        Camera.FieldOfView=tgtFOV; if t>=1 then CinStopShot() end
+    end)
+end
+
+-- Reveal Down — kamera turun dari kepala ke kaki
+local function RunRevealDown()
+    local t0,dur=tick(),CinD(4)
+    CIN.Conn=RunService.RenderStepped:Connect(function()
+        if not CIN.Playing then return end
+        local root=CinGetRoot(); if not root then return end
+        local t=math.clamp((tick()-t0)/dur,0,1); local e=CinEO3(t)
+        -- Mulai dari atas (kepala), turun ke bawah (kaki)
+        local cy=(root.Position.Y+3.5)-7*e; local off=CinCO(CFG.OrbitRadius)
         Camera.CFrame=CFrame.lookAt(
             Vector3.new(root.Position.X+off.X,cy,root.Position.Z+off.Z),
             Vector3.new(root.Position.X,cy,root.Position.Z))
@@ -1179,26 +1297,18 @@ local function RunDollyOut()
     end)
 end
 
--- Map shot key → function
-local ShotFns = {
-    DroneIn  = RunDroneIn,
-    DroneOut = RunDroneOut,
-    Orbit360 = RunOrbit360,
-    CinPan   = RunCinPan,
-    Reveal   = RunReveal,
-    DollyIn  = RunDollyIn,
-    DollyOut = RunDollyOut,
-}
+-- Isi ShotFns (forward declaration dari atas)
+ShotFns.DroneIn    = RunDroneIn
+ShotFns.DroneOut   = RunDroneOut
+ShotFns.Orbit360   = RunOrbit360
+ShotFns.CinPan     = RunCinPan
+ShotFns.CinPanRL   = RunCinPanRL
+ShotFns.Reveal     = RunReveal
+ShotFns.RevealDown = RunRevealDown
+ShotFns.DollyIn    = RunDollyIn
+ShotFns.DollyOut   = RunDollyOut
 
--- Connect shot buttons
-for _, sd in ipairs(SHOT_LIST) do
-    local k = sd.k
-    if ShotBtns[k] then
-        ShotBtns[k].MouseButton1Click:Connect(function()
-            CinStartShot(k, ShotFns[k])
-        end)
-    end
-end
+-- Connect shot buttons (click sudah di-wire langsung di build loop di atas)
 BStopCin.MouseButton1Click:Connect(CinStopShot)
 
 -- ══════════════════════════════════════════
