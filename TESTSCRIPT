@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║   WiraPro FREECAM V3.6  +  Cinematic Edition            ║
+-- ║   WiraPro FREECAM V3.7  +  Cinematic Edition            ║
 -- ║   Y2K Glass · FreeCam · Orbit · Teleport · ESP          ║
 -- ║   + Cinematic Shots · Direction (Front/Back)             ║
 -- ║   + Shared Speed/Radius/Height · Auto-hide UI on Shot   ║
@@ -1120,6 +1120,14 @@ CinStopShot = function()
         -- Freecam tidak aktif: kembalikan kamera normal + tampilkan kembali semua UI game
         Camera.CameraType = Enum.CameraType.Custom
         Camera.FieldOfView = CFG.DefaultFOV
+        -- Unfreeze karakter
+        local ch = Player.Character
+        if ch then
+            local h = ch:FindFirstChildOfClass("Humanoid")
+            if h then h.WalkSpeed=16; h.JumpPower=50 end
+            local root = ch:FindFirstChild("HumanoidRootPart")
+            if root then root.Anchored=false end
+        end
         showOthers()
     end
     CIN.ActiveKey = nil
@@ -1139,6 +1147,16 @@ CinStartShot = function(k, fn)
     end
     -- Sembunyikan semua UI game (termasuk UI Roblox bawaan map)
     hideOthers()
+    -- Freeze karakter jika freecam tidak aktif (agar karakter tidak bergerak saat shot)
+    if not freecamActive then
+        local ch = Player.Character
+        if ch then
+            local h = ch:FindFirstChildOfClass("Humanoid")
+            if h then h.WalkSpeed=0; h.JumpPower=0 end
+            local root = ch:FindFirstChild("HumanoidRootPart")
+            if root then root.Anchored=true end
+        end
+    end
     -- Sembunyikan panel WiraPro saat shot aktif
     TweenService:Create(MainPanel,TweenInfo.new(0.25,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{BackgroundTransparency=1.0}):Play()
     task.delay(0.25, function() if CIN.Playing then MainPanel.Visible = false end end)
@@ -1321,7 +1339,12 @@ local function enableFreecam()
     local lk=camCF.LookVector; yaw=math.atan2(-lk.X,-lk.Z); pitch=math.asin(lk.Y); roll=0
     curFOV=Camera.FieldOfView; tgtFOV=curFOV
     local ch=Player.Character
-    if ch then local h=ch:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed=0; h.JumpPower=0 end end
+    if ch then
+        local h=ch:FindFirstChildOfClass("Humanoid")
+        if h then h.WalkSpeed=0; h.JumpPower=0 end
+        local root=ch:FindFirstChild("HumanoidRootPart")
+        if root then root.Anchored=true end
+    end
     local tgt=orbitTarget or Player
     if tgt and tgt.Character then
         local root=tgt.Character:FindFirstChild("HumanoidRootPart")
@@ -1339,7 +1362,12 @@ local function disableFreecam()
     if CIN.Playing then CinStopShot() end
     freecamActive=false; Camera.CameraType=savedCamType or Enum.CameraType.Custom; Camera.FieldOfView=savedFOV
     local ch=Player.Character
-    if ch then local h=ch:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed=16; h.JumpPower=50 end end
+    if ch then
+        local h=ch:FindFirstChildOfClass("Humanoid")
+        if h then h.WalkSpeed=16; h.JumpPower=50 end
+        local root=ch:FindFirstChild("HumanoidRootPart")
+        if root then root.Anchored=false end
+    end
     showOthers()
     ToggleLbl.Text="FREECAM  OFF"; ToggleLbl.TextColor3=CFG.CreamDim
     ToggleSub.Text="tap to activate"; ToggleSub.TextColor3=CFG.CreamDim
