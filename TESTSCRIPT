@@ -19,7 +19,7 @@ local Camera    = workspace.CurrentCamera
 -- CFG — Palette: Ember (default)
 -- ══════════════════════════════════════════
 local CFG = {
-    MoveSpeed=0.5, RotateSpeed=0.004,
+    MoveSpeed=0.05, RotateSpeed=0.004,
     MinFOV=10, MaxFOV=120, DefaultFOV=70,
     FishEyeFOV=110, DollyFOV=20, SmoothFactor=0.12,
     OrbitSpeed=0.5, OrbitRadius=12, OrbitHeight=4,
@@ -527,13 +527,16 @@ local function spUpd(pos)
     local r=math.clamp((pos.X-spTrk.AbsolutePosition.X)/spTrk.AbsoluteSize.X,0,1)
     local st=math.floor(r*49+0.5); local sp2=0.1+st*0.1; local sr=st/49
     spFl.Size=UDim2.new(sr,0,1,0); spKn.Position=UDim2.new(sr,-7,0.5,-7)
-    speedVL.Text=string.format("%.1f",sp2); CFG.MoveSpeed=sp2
+    speedVL.Text=string.format("%.1f",sp2)
+    -- Power curve: nilai kecil (0.1) = sangat lambat, nilai besar (5.0) = cepat penuh
+    -- sp2=0.1 → 0.002 studs/frame | sp2=1.0 → 0.2 | sp2=5.0 → 5.0
+    CFG.MoveSpeed = (sp2 * sp2) / 5.0
 end
 spKn.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then spDg=true end end)
 spTrk.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then spDg=true; spUpd(i.Position) end end)
 UserInputService.InputChanged:Connect(function(i) if spDg and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then spUpd(i.Position) end end)
 UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then spDg=false end end)
-local resetSpeed=function() spFl.Size=UDim2.new(4/49,0,1,0); spKn.Position=UDim2.new(4/49,-7,0.5,-7); speedVL.Text="0.5"; CFG.MoveSpeed=0.5 end
+local resetSpeed=function() spFl.Size=UDim2.new(4/49,0,1,0); spKn.Position=UDim2.new(4/49,-7,0.5,-7); speedVL.Text="0.5"; CFG.MoveSpeed=(0.5*0.5)/5.0 end
 
 makeSep(camCard,104)
 local resetTilt=makeCardSlider(camCard,"Camera Tilt",-180,180,0,108,function(v) roll=math.rad(v) end)
