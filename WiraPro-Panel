@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════════╗
--- ║   WiraPro Panel  V0.6  ·  LocalScript                       ║
+-- ║   WiraPro Panel  V0.7  ·  LocalScript                       ║
 -- ║   · Fly  — arah ikuti POV kamera  [F]                       ║
 -- ║   · Noclip — tembus tembok  [N]                              ║
 -- ║   · Zero Fall Damage  [Z]                                    ║
@@ -9,7 +9,8 @@
 -- ║   · Unload Script — hapus UI & pulihkan karakter             ║
 -- ║   · UI Glass Dark — transparan, tanpa emoji                  ║
 -- ║   · No Clip di bawah Speed Run                               ║
--- ║   · Drag & Minimize                                          ║
+-- ║   · Drag & Minimize (panel mengecil ke title bar)            ║
+-- ║   · Body menu ScrollingFrame — bisa di-scroll                ║
 -- ╚══════════════════════════════════════════════════════════════╝
 -- StarterPlayer → StarterPlayerScripts  (LocalScript)
 
@@ -98,7 +99,7 @@ local dragging    = false
 -- SCREENGUI
 -- ══════════════════════════════════════════
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name           = "WiraProPanelV06"
+ScreenGui.Name           = "WiraProPanelV07"
 ScreenGui.ResetOnSpawn   = false
 ScreenGui.DisplayOrder   = 999
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -124,10 +125,14 @@ end
 -- ══════════════════════════════════════════
 -- UKURAN PANEL
 -- ══════════════════════════════════════════
-local PANEL_W = 244
--- Panel H lebih tinggi karena No Clip dipindah ke bawah Speed Run + slider Run
-local PANEL_H = 516
-local TITLE_H = 36
+local PANEL_W  = 244
+-- Total konten body ~430px, panel menampilkan setengahnya (~215px) + title bar
+local PANEL_H  = 36 + 240   -- TITLE_H + tinggi scroll area (setengah konten)
+local TITLE_H  = 36
+local BODY_H   = 240         -- tinggi scroll area (kira-kira setengah konten asli)
+local CONTENT_H = 430        -- total tinggi konten di dalam scroll
+-- Lebar panel saat minimize: pas sama tulisan title + dots + tombol minimize
+local MINI_W   = 190
 
 -- ── Panel utama ────────────────────────────
 local panel, panelStroke = makeGlass(ScreenGui, C.Glass, 0.42, C.Accent, 0.55, 14)
@@ -187,7 +192,7 @@ makeDot(titleBar, 32, Color3.fromRGB(40, 200, 64))
 -- Label nama script — TANPA EMOJI
 local titleLbl = Instance.new("TextLabel")
 titleLbl.Size=UDim2.new(1,-80,0,TITLE_H); titleLbl.Position=UDim2.new(0,48,0,0)
-titleLbl.BackgroundTransparency=1; titleLbl.Text="WiraPro Panel  V0.6"
+titleLbl.BackgroundTransparency=1; titleLbl.Text="WiraPro Panel  V0.7"
 titleLbl.TextColor3=C.Text; titleLbl.TextSize=10; titleLbl.Font=Enum.Font.GothamBold
 titleLbl.TextXAlignment=Enum.TextXAlignment.Left
 titleLbl.ZIndex=11; titleLbl.Parent=titleBar
@@ -210,11 +215,19 @@ minBtn.MouseLeave:Connect(function()
     TweenService:Create(minBtn,TweenInfo.new(0.12),{BackgroundColor3=Color3.fromRGB(60,60,90),BackgroundTransparency=0.40}):Play()
 end)
 
--- ── Body ───────────────────────────────────
-local body = Instance.new("Frame")
-body.Name="Body"; body.Size=UDim2.new(1,0,1,-TITLE_H)
-body.Position=UDim2.new(0,0,0,TITLE_H)
-body.BackgroundTransparency=1; body.BorderSizePixel=0; body.Parent=panel
+-- ── Body (ScrollingFrame agar menu bisa di-scroll) ────────────
+local body = Instance.new("ScrollingFrame")
+body.Name                 = "Body"
+body.Size                 = UDim2.new(1, 0, 1, -TITLE_H)
+body.Position             = UDim2.new(0, 0, 0, TITLE_H)
+body.CanvasSize           = UDim2.new(0, 0, 0, CONTENT_H)
+body.ScrollBarThickness   = 3
+body.ScrollBarImageColor3 = C.Accent
+body.ScrollBarImageTransparency = 0.35
+body.ScrollingDirection   = Enum.ScrollingDirection.Y
+body.BackgroundTransparency = 1
+body.BorderSizePixel      = 0
+body.Parent               = panel
 
 -- ══════════════════════════════════════════
 -- HELPER: tombol glass gelap
@@ -428,15 +441,17 @@ end)
 local TWEEN_M = TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
 local function setMinimized(mini)
-    isMinimized=mini
+    isMinimized = mini
     if mini then
-        TweenService:Create(panel,TWEEN_M,{Size=UDim2.new(0,PANEL_W,0,TITLE_H)}):Play()
-        minBtn.Text="+"
-        body.Visible=false
+        -- Kecilkan panel: lebar pas tulisan title, tinggi cuma title bar
+        TweenService:Create(panel, TWEEN_M, {Size=UDim2.new(0, MINI_W, 0, TITLE_H)}):Play()
+        minBtn.Text  = "+"
+        body.Visible = false
     else
-        body.Visible=true
-        TweenService:Create(panel,TWEEN_M,{Size=UDim2.new(0,PANEL_W,0,PANEL_H)}):Play()
-        minBtn.Text="−"
+        body.Visible = true
+        -- Kembalikan panel ke ukuran normal (lebar penuh + scroll area)
+        TweenService:Create(panel, TWEEN_M, {Size=UDim2.new(0, PANEL_W, 0, PANEL_H)}):Play()
+        minBtn.Text  = "−"
     end
 end
 
@@ -550,7 +565,7 @@ local function updateUI_Flying(on)
     else
         flyBtn.Text="FLY  OFF"
         TweenService:Create(flyBtn,TweenInfo.new(0.2),{BackgroundColor3=C.BtnFlyOff}):Play()
-        titleLbl.Text="WiraPro Panel  V0.6"; titleLbl.TextColor3=C.Text
+        titleLbl.Text="WiraPro Panel  V0.7"; titleLbl.TextColor3=C.Text
     end
     refreshAccent()
 end
@@ -769,7 +784,7 @@ local function resetAll()
     end)
 
     refreshAccent()
-    titleLbl.Text="WiraPro Panel  V0.6"; titleLbl.TextColor3=C.Text
+    titleLbl.Text="WiraPro Panel  V0.7"; titleLbl.TextColor3=C.Text
 end
 
 -- ══════════════════════════════════════════
@@ -798,7 +813,7 @@ local function unloadScript()
         {BackgroundTransparency=1,Size=UDim2.new(0,PANEL_W,0,0)}):Play()
     task.delay(0.4,function()
         ScreenGui:Destroy()
-        warn("WiraPro Panel V0.6 — unloaded.")
+        warn("WiraPro Panel V0.7 — unloaded.")
     end)
 end
 
@@ -903,7 +918,7 @@ player.CharacterAdded:Connect(function()
 end)
 
 warn("╔══════════════════════════════════════════╗")
-warn("║  WiraPro Panel V0.6  — Glass Dark UI     ║")
+warn("║  WiraPro Panel V0.7  — Glass Dark UI     ║")
 warn("║  [F]Fly [N]Noclip [Z]FallDmg [J]Jump    ║")
 warn("║  [R]SpeedRun  [0]ResetAll                ║")
 warn("╚══════════════════════════════════════════╝")
