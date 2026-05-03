@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║   WiraPro FREECAM V3.7  +  Cinematic Edition            ║
+-- ║   WiraPro FREECAM V3.8  +  Cinematic Edition            ║
 -- ║   Y2K Glass · FreeCam · Orbit · Teleport · ESP          ║
 -- ║   + Cinematic Shots · Direction (Front/Back)             ║
 -- ║   + Shared Speed/Radius/Height · Auto-hide UI on Shot   ║
@@ -1064,6 +1064,132 @@ end
 buildPreviewBar(THEMES[1])
 
 -- ══════════════════════════════════════════
+-- ⚠ UNLOAD SCRIPT CARD  (paling bawah)
+-- ══════════════════════════════════════════
+local unloadCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,80),nil,"UnloadCard",UDim.new(0,12),0.68)
+unloadCard.BackgroundColor3=Color3.fromRGB(35,10,10)
+unloadCard.LayoutOrder=999
+
+makeLabel(unloadCard,"⚠  UNLOAD SCRIPT",UDim2.new(1,-16,0,14),UDim2.new(0,8,0,7),8,true,Color3.fromRGB(255,100,100),Enum.TextXAlignment.Left)
+makeLabel(unloadCard,"Hapus semua GUI & kembalikan kamera",UDim2.new(1,-16,0,12),UDim2.new(0,8,0,20),7,false,Color3.fromRGB(210,140,140),Enum.TextXAlignment.Left)
+
+local unloadBtn=Instance.new("TextButton")
+unloadBtn.Size=UDim2.new(1,-16,0,30)
+unloadBtn.Position=UDim2.new(0,8,0,40)
+unloadBtn.BackgroundColor3=Color3.fromRGB(160,40,40)
+unloadBtn.BackgroundTransparency=0.30
+unloadBtn.BorderSizePixel=0
+unloadBtn.Text="🗑  UNLOAD / KELUAR"
+unloadBtn.TextColor3=Color3.fromRGB(255,220,220)
+unloadBtn.TextSize=11
+unloadBtn.Font=Enum.Font.MontserratBold
+unloadBtn.AutoButtonColor=false
+unloadBtn.Parent=unloadCard
+local ulC=Instance.new("UICorner"); ulC.CornerRadius=UDim.new(0,8); ulC.Parent=unloadBtn
+local ulS=Instance.new("UIStroke"); ulS.Color=Color3.fromRGB(255,100,100); ulS.Thickness=1; ulS.Transparency=0.30; ulS.Parent=unloadBtn
+local ulSh=Instance.new("Frame"); ulSh.Size=UDim2.new(0.55,0,0,1.5); ulSh.Position=UDim2.new(0.12,0,0,4)
+ulSh.BackgroundColor3=Color3.fromRGB(255,255,255); ulSh.BackgroundTransparency=0.55
+ulSh.BorderSizePixel=0; ulSh.ZIndex=unloadBtn.ZIndex+1; ulSh.Parent=unloadBtn
+local ulShC=Instance.new("UICorner"); ulShC.CornerRadius=UDim.new(1,0); ulShC.Parent=ulSh
+
+unloadBtn.MouseEnter:Connect(function()
+    TweenService:Create(unloadBtn,TweenInfo.new(0.10),{BackgroundTransparency=0.05,TextColor3=Color3.fromRGB(255,255,255)}):Play()
+end)
+unloadBtn.MouseLeave:Connect(function()
+    TweenService:Create(unloadBtn,TweenInfo.new(0.10),{BackgroundTransparency=0.30,TextColor3=Color3.fromRGB(255,220,220)}):Play()
+end)
+unloadBtn.MouseButton1Down:Connect(function()
+    TweenService:Create(unloadBtn,TweenInfo.new(0.05),{BackgroundTransparency=0.0}):Play()
+end)
+unloadBtn.MouseButton1Up:Connect(function()
+    TweenService:Create(unloadBtn,TweenInfo.new(0.08),{BackgroundTransparency=0.05}):Play()
+end)
+
+local unloadConfirmed = false
+unloadBtn.MouseButton1Click:Connect(function()
+    if not unloadConfirmed then
+        -- Konfirmasi pertama
+        unloadConfirmed = true
+        unloadBtn.Text = "⚠  Klik lagi untuk konfirmasi"
+        unloadBtn.TextColor3 = Color3.fromRGB(255,255,100)
+        ulS.Color = Color3.fromRGB(255,255,80)
+        task.delay(3, function()
+            if unloadConfirmed then
+                unloadConfirmed = false
+                pcall(function()
+                    unloadBtn.Text = "🗑  UNLOAD / KELUAR"
+                    unloadBtn.TextColor3 = Color3.fromRGB(255,220,220)
+                    ulS.Color = Color3.fromRGB(255,100,100)
+                end)
+            end
+        end)
+        return
+    end
+
+    -- ── UNLOAD ──
+    unloadConfirmed = false
+
+    -- 1. Stop cinematic shot jika aktif
+    pcall(function()
+        if CIN and CIN.Playing and CIN.Conn then
+            CIN.Playing = false
+            CIN.Conn:Disconnect()
+            CIN.Conn = nil
+        end
+    end)
+
+    -- 2. Disable freecam & kembalikan karakter
+    pcall(function()
+        if freecamActive then
+            freecamActive = false
+            Camera.CameraType = savedCamType or Enum.CameraType.Custom
+            Camera.FieldOfView = savedFOV or CFG.DefaultFOV
+            local ch = Player.Character
+            if ch then
+                local h = ch:FindFirstChildOfClass("Humanoid")
+                if h then h.WalkSpeed=16; h.JumpPower=50 end
+                local root = ch:FindFirstChild("HumanoidRootPart")
+                if root then root.Anchored=false end
+            end
+        end
+    end)
+
+    -- 3. Tampilkan kembali semua GUI yang disembunyikan
+    pcall(function()
+        for _,g in ipairs(hiddenGuis) do
+            if g and g.Parent then g.Enabled=true end
+        end
+        hiddenGuis={}
+    end)
+
+    -- 4. Disable ESP
+    pcall(function()
+        if espActive then
+            espActive = false
+            for p,data in pairs(espLabels) do
+                if data then
+                    if data.nameLbl then data.nameLbl:Destroy() end
+                    if data.distLbl then data.distLbl:Destroy() end
+                end
+            end
+            espLabels={}
+        end
+    end)
+
+    -- 5. Hapus ESP GUI
+    pcall(function()
+        if EspGui and EspGui.Parent then EspGui:Destroy() end
+    end)
+
+    -- 6. Hapus main ScreenGui
+    pcall(function()
+        if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
+    end)
+
+    print("✦ WiraPro FREECAM — Script unloaded. Semua GUI dihapus.")
+end)
+
+-- ══════════════════════════════════════════
 -- HIDE / SHOW GUIs
 -- ══════════════════════════════════════════
 local hiddenGuis={}
@@ -1268,51 +1394,83 @@ local function RunRevealDown()
     end)
 end
 
--- Dolly Zoom IN — kamera maju, FOV melebar → background "menghantam" (vertigo)
--- FIX: interpolasi FOV langsung (bukan radius), radius dihitung dari K agar
---      ukuran subject di layar benar-benar konstan sepanjang shot.
+-- Dolly Zoom IN — kamera maju (mundur jauh → dekat), FOV melebar secara bersamaan
+-- Efek vertigo: subject tetap sama besar di layar, background terasa "menghantam maju"
 local function RunDollyIn()
+    local root = CinGetRoot(); if not root then return end
     local dur     = CinD(8)
-    local fovEnd  = math.clamp(tgtFOV, 35, 90)
-    local fovStart = 16          -- super-narrow: kamera sangat zoomed-in di awal
-    -- K = rEnd * tan(fovEnd/2) → subject apparent size tetap konstan
-    local rEnd = math.max(CFG.OrbitRadius * 0.75, 2.5)
+
+    -- FOV: mulai sempit (zoomed in jauh), akhir lebar (normal)
+    local fovStart = 15
+    local fovEnd   = math.clamp(tgtFOV, 40, 100)
+
+    -- Kunci arah offset di awal shot agar kamera tidak goyang mengikuti rotasi root
+    local fwd = root.CFrame.LookVector
+    local dirOffset = (CIN.Facing == "Front") and (-fwd) or (fwd)
+
+    -- K: konstanta dolly zoom agar apparent size subject konstan
+    -- Hitung dari titik AKHIR (dekat, FOV lebar) supaya posisi awal = jauh
+    local rEnd = math.max(CFG.OrbitRadius * 0.6, 2.0)
     local K    = rEnd * math.tan(math.rad(fovEnd) / 2)
-    local t0   = tick()
+
+    -- Posisi look target dikunci di awal (kepala subject)
+    local lookOffset = Vector3.new(0, 1.5, 0)
+
+    local t0 = tick()
     CIN.Conn = RunService.RenderStepped:Connect(function()
         if not CIN.Playing then return end
-        local root = CinGetRoot(); if not root then return end
-        local t   = math.clamp((tick() - t0) / dur, 0, 1)
-        local e   = CinEIS(t)
-        -- ✔ FOV diinterpolasi → perubahan zoom merata di seluruh durasi
+        local r = CinGetRoot(); if not r then return end
+        local t = math.clamp((tick() - t0) / dur, 0, 1)
+        local e = CinEIS(t)
+
+        -- FOV naik dari sempit → lebar
         local fov = fovStart + (fovEnd - fovStart) * e
-        -- ✔ Radius dihitung dari K agar ukuran subject konstan di layar
+        -- Radius turun dari jauh → dekat (K konstan → subject tetap sama besar)
         local rad = K / math.tan(math.rad(fov) / 2)
-        -- ✔ Look target di head-level tetap (tidak ikut OrbitHeight)
-        local lookPt = root.Position + Vector3.new(0, 1.5, 0)
-        Camera.CFrame      = CFrame.lookAt(lookPt + CinCO(rad) + Vector3.new(0, CFG.OrbitHeight * 0.35, 0), lookPt)
+
+        local lookPt  = r.Position + lookOffset
+        local camPos3 = lookPt + dirOffset * rad + Vector3.new(0, CFG.OrbitHeight * 0.3, 0)
+        Camera.CFrame      = CFrame.lookAt(camPos3, lookPt)
         Camera.FieldOfView = math.clamp(fov, 10, 120)
         if t >= 1 then Camera.FieldOfView = fovEnd; CinStopShot() end
     end)
 end
 
--- Dolly Zoom OUT — kamera mundur, FOV menyempit → background "kabur menjauh" (vertigo)
+-- Dolly Zoom OUT — kamera mundur (dekat → jauh), FOV menyempit secara bersamaan
+-- Efek vertigo: subject tetap sama besar di layar, background terasa "ditarik mundur"
 local function RunDollyOut()
-    local dur      = CinD(8)
-    local fovStart = math.clamp(tgtFOV, 35, 90)
-    local fovEnd   = 16          -- super-narrow: kamera sangat zoomed-in di akhir
-    local rStart   = math.max(CFG.OrbitRadius * 0.75, 2.5)
-    local K        = rStart * math.tan(math.rad(fovStart) / 2)
-    local t0       = tick()
+    local root = CinGetRoot(); if not root then return end
+    local dur = CinD(8)
+
+    -- FOV: mulai lebar (normal), akhir sempit (zoomed in jauh)
+    local fovStart = math.clamp(tgtFOV, 40, 100)
+    local fovEnd   = 15
+
+    -- Kunci arah offset di awal shot
+    local fwd = root.CFrame.LookVector
+    local dirOffset = (CIN.Facing == "Front") and (-fwd) or (fwd)
+
+    -- K dihitung dari titik AWAL (dekat, FOV lebar)
+    local rStart = math.max(CFG.OrbitRadius * 0.6, 2.0)
+    local K      = rStart * math.tan(math.rad(fovStart) / 2)
+
+    local lookOffset = Vector3.new(0, 1.5, 0)
+
+    local t0 = tick()
     CIN.Conn = RunService.RenderStepped:Connect(function()
         if not CIN.Playing then return end
-        local root = CinGetRoot(); if not root then return end
-        local t   = math.clamp((tick() - t0) / dur, 0, 1)
-        local e   = CinEIS(t)
+        local r = CinGetRoot(); if not r then return end
+        local t = math.clamp((tick() - t0) / dur, 0, 1)
+        local e = CinEIS(t)
+
+        -- FOV turun dari lebar → sempit
         local fov = fovStart + (fovEnd - fovStart) * e
+        -- Radius naik dari dekat → jauh (K konstan → subject tetap sama besar)
         local rad = K / math.tan(math.rad(fov) / 2)
-        local lookPt = root.Position + Vector3.new(0, 1.5, 0)
-        Camera.CFrame      = CFrame.lookAt(lookPt + CinCO(rad) + Vector3.new(0, CFG.OrbitHeight * 0.35, 0), lookPt)
+
+        local lookPt  = r.Position + lookOffset
+        local camPos3 = lookPt + dirOffset * rad + Vector3.new(0, CFG.OrbitHeight * 0.3, 0)
+        Camera.CFrame      = CFrame.lookAt(camPos3, lookPt)
         Camera.FieldOfView = math.clamp(fov, 10, 120)
         if t >= 1 then Camera.FieldOfView = fovEnd; CinStopShot() end
     end)
@@ -1627,7 +1785,7 @@ end)
 
 task.spawn(function()
     task.wait(0.1)
-    print("✦ WiraPro FREECAM V3.1 + Cinematic Edition — Ready")
+    print("✦ WiraPro FREECAM V3.8 + Cinematic Edition — Ready")
     print("  FREE     : WASD+Q/E gerak | RMB rotate")
     print("  ORBIT    : Isi UserId/Username → CARI → ORBIT")
     print("  CINEMATIC: Scroll ke '🎬 CINEMATIC SHOTS' → pilih shot → play")
@@ -1635,5 +1793,5 @@ task.spawn(function()
     print("  SHARED   : Speed/Radius/Height di Orbit Card = dipakai juga oleh Cinematic")
     print("  ESP      : Tap kartu ESP untuk ON/OFF")
     print("  THEME    : Scroll bawah → COLOUR THEME → 5 tema")
-    print("  Color Registry entries: "..#colorRegistry)
+    print("  UNLOAD   : Scroll paling bawah → UNLOAD SCRIPT → klik 2x")
 end)
