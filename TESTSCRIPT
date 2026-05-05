@@ -811,7 +811,7 @@ local espToggleSub=makeLabel(espCard,"nama & jarak player",UDim2.new(1,-50,0,14)
 -- ══════════════════════════════════════════
 -- 🎬 CINEMATIC SHOTS CARD  ← NEW
 -- ══════════════════════════════════════════
-local cinH = 36 + 9*46 + 12 + 36 + 10  -- header + 9 shot btns (46px each) + gap + stop btn + padding
+local cinH = 36 + 12*46 + 12 + 36 + 10  -- header + 9 shot btns (46px each) + gap + stop btn + padding
 local cinCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,cinH),nil,"CinCard",UDim.new(0,12),0.68)
 cinCard.BackgroundColor3=CFG.BgCard; reg(cinCard,"BackgroundColor3","BgCard")
 cinCard.LayoutOrder=8
@@ -820,15 +820,18 @@ makeLabel(cinCard,"🎬  CINEMATIC SHOTS",UDim2.new(1,-16,0,14),UDim2.new(0,8,0,
 makeLabel(cinCard,"(pakai target orbit / diri sendiri)",UDim2.new(1,-16,0,12),UDim2.new(0,8,0,19),7,false,CFG.CreamDim,Enum.TextXAlignment.Left)
 
 local SHOT_LIST = {
-    {k="DroneIn",    ico="🚁", name="Drone Zoom IN",   desc="maju mendekati target"},
-    {k="DroneOut",   ico="🚁", name="Drone Zoom OUT",  desc="mundur menjauhi target"},
-    {k="Orbit360",   ico="🔄", name="Orbit 360°",      desc="berputar mengelilingi target"},
-    {k="CinPan",     ico="🎥", name="Cinematic Pan",   desc="geser kiri → kanan"},
-    {k="CinPanRL",   ico="🎥", name="Cinematic Pan",   desc="geser kanan → kiri"},
-    {k="Reveal",     ico="⬆", name="Reveal Up",       desc="dari kaki ke kepala"},
-    {k="RevealDown", ico="⬇", name="Reveal Down",     desc="dari kepala ke kaki"},
-    {k="DollyIn",    ico="🌀", name="Dolly Zoom IN",   desc="maju · FOV sempit (vertigo)"},
-    {k="DollyOut",   ico="🌀", name="Dolly Zoom OUT",  desc="mundur · FOV lebar (vertigo)"},
+    {k="DroneIn",       ico="🚁", name="Drone Zoom IN",      desc="maju mendekati target"},
+    {k="DroneOut",      ico="🚁", name="Drone Zoom OUT",     desc="mundur menjauhi target"},
+    {k="Orbit360",      ico="🔄", name="Orbit 360°",         desc="berputar mengelilingi target"},
+    {k="CinPan",        ico="🎥", name="Cinematic Pan",      desc="geser kiri → kanan"},
+    {k="CinPanRL",      ico="🎥", name="Cinematic Pan",      desc="geser kanan → kiri"},
+    {k="Reveal",        ico="⬆",  name="Reveal Up",          desc="dari kaki ke kepala"},
+    {k="RevealDown",    ico="⬇",  name="Reveal Down",        desc="dari kepala ke kaki"},
+    {k="DollyIn",       ico="🌀", name="Dolly Zoom IN",      desc="maju · FOV sempit (vertigo)"},
+    {k="DollyOut",      ico="🌀", name="Dolly Zoom OUT",     desc="mundur · FOV lebar (vertigo)"},
+    {k="DanceCam",      ico="🕺", name="Dance Cam",          desc="goyang kanan-kiri · fokus player"},
+    {k="DanceCamHype",  ico="🔥", name="Dance Cam HYPE",     desc="joget cepat · beat agresif"},
+    {k="DanceCamClose", ico="🤳", name="Dance Cam CLOSE",    desc="close-up wajah · portrait style"},
 }
 
 local shotBtnY = 36
@@ -1476,16 +1479,188 @@ local function RunDollyOut()
     end)
 end
 
+-- ══════════════════════════════════════════
+-- 🕺 DANCE CAM — kamera goyang kanan-kiri
+--    seperti orang joget, selalu fokus ke player
+-- ══════════════════════════════════════════
+
+-- Dance Cam Normal — goyang santai, irama lambat
+local function RunDanceCam()
+    local root = CinGetRoot(); if not root then return end
+    local dur  = CinD(12)   -- durasi shot (makin tinggi Speed slider, makin cepat selesai)
+
+    -- Parameter shake
+    local swingAmt  = CFG.OrbitRadius * 0.55  -- seberapa jauh kamera bergeser kanan-kiri
+    local bobAmt    = 0.45                      -- naik-turun kepala (bob)
+    local tiltAmt   = 8                         -- derajat miring kiri-kanan (roll)
+    local beatHz    = 1.8                       -- beat per detik (BPM ~108)
+    local dist      = math.max(CFG.OrbitRadius, 3)
+    local lookH     = 1.4                       -- titik fokus di badan player (kepala/dada)
+
+    -- Noise ringan untuk feel organic
+    local function noise(s, f) return math.sin(tick()*f + s)*0.5 + math.sin(tick()*f*1.7+s)*0.3 end
+
+    local t0 = tick()
+    CIN.Conn = RunService.RenderStepped:Connect(function(dt)
+        if not CIN.Playing then return end
+        local r = CinGetRoot(); if not r then return end
+        local elapsed = tick() - t0
+        local tNorm   = math.clamp(elapsed / dur, 0, 1)
+
+        -- Beat: sin wave agar terasa berirama
+        local beat    = math.sin(elapsed * beatHz * math.pi * 2)
+        local beatSq  = math.sin(elapsed * beatHz * math.pi * 2 + math.pi/2)  -- quarter offset
+
+        -- Posisi kamera: ikuti player + swing kanan-kiri
+        local fwd     = r.CFrame.LookVector
+        local right   = r.CFrame.RightVector
+        local dirVec  = (CIN.Facing == "Front") and (-fwd) or (fwd)
+
+        local swingOff   = right * (beat * swingAmt)
+        local bobOff     = Vector3.new(0, beatSq * bobAmt, 0)
+        local noiseOff   = Vector3.new(noise(0,0.9)*0.18, noise(1,1.1)*0.12, noise(2,0.7)*0.10)
+
+        local camPos3    = r.Position
+                         + dirVec * dist
+                         + Vector3.new(0, CFG.OrbitHeight, 0)
+                         + swingOff + bobOff + noiseOff
+
+        local lookPt     = r.Position + Vector3.new(0, lookH, 0)
+
+        -- Roll: miring mengikuti swing (feel dance)
+        local rollDeg    = -beat * tiltAmt
+        local baseCF     = CFrame.lookAt(camPos3, lookPt)
+        Camera.CFrame    = baseCF * CFrame.Angles(0, 0, math.rad(rollDeg))
+        Camera.FieldOfView = math.clamp(tgtFOV + beatSq * 2, CFG.MinFOV, CFG.MaxFOV)
+
+        if tNorm >= 1 then CinStopShot() end
+    end)
+end
+
+-- Dance Cam HYPE — goyang cepat & agresif, beat tinggi (ala joget TikTok)
+local function RunDanceCamHype()
+    local root = CinGetRoot(); if not root then return end
+    local dur  = CinD(10)
+
+    local swingAmt  = CFG.OrbitRadius * 0.75
+    local bobAmt    = 0.65
+    local tiltAmt   = 14
+    local beatHz    = 3.0   -- BPM ~180 (joget cepat)
+    local dist      = math.max(CFG.OrbitRadius * 0.85, 2.5)
+    local lookH     = 1.5
+
+    -- Shake tambahan: micro tremor
+    local function shake(seed) return (math.random()-0.5)*2 * seed end
+    math.randomseed(tick())
+
+    local t0 = tick()
+    local shakeT  = 0
+    local shakeCur = Vector3.new(0,0,0)
+    local shakeRate = 0.04  -- update shake setiap 40ms
+
+    CIN.Conn = RunService.RenderStepped:Connect(function(dt)
+        if not CIN.Playing then return end
+        local r = CinGetRoot(); if not r then return end
+        local elapsed = tick() - t0
+        local tNorm   = math.clamp(elapsed / dur, 0, 1)
+
+        local beat     = math.sin(elapsed * beatHz * math.pi * 2)
+        local beatSq   = math.sin(elapsed * beatHz * math.pi * 2 + math.pi/2)
+        local beat3    = math.sin(elapsed * beatHz * math.pi * 3)  -- harmonik ke-3
+
+        local fwd   = r.CFrame.LookVector
+        local right = r.CFrame.RightVector
+        local dirVec = (CIN.Facing == "Front") and (-fwd) or (fwd)
+
+        -- Update micro-shake setiap interval
+        shakeT = shakeT + dt
+        if shakeT >= shakeRate then
+            shakeT = 0
+            shakeCur = Vector3.new(shake(0.22), shake(0.14), shake(0.10))
+        end
+
+        local swingOff = right * (beat * swingAmt + beat3 * swingAmt * 0.25)
+        local bobOff   = Vector3.new(0, beatSq * bobAmt + math.abs(beat3) * 0.18, 0)
+
+        local camPos3  = r.Position
+                       + dirVec * dist
+                       + Vector3.new(0, CFG.OrbitHeight, 0)
+                       + swingOff + bobOff + shakeCur
+
+        local lookPt   = r.Position + Vector3.new(0, lookH, 0)
+
+        local rollDeg  = -beat * tiltAmt + beat3 * tiltAmt * 0.3
+        local baseCF   = CFrame.lookAt(camPos3, lookPt)
+        Camera.CFrame  = baseCF * CFrame.Angles(0, 0, math.rad(rollDeg))
+        Camera.FieldOfView = math.clamp(tgtFOV + math.abs(beat) * 4 - 2, CFG.MinFOV, CFG.MaxFOV)
+
+        if tNorm >= 1 then CinStopShot() end
+    end)
+end
+
+-- Dance Cam CLOSE — jarak dekat, goyang, zoom ke wajah (portrait style)
+local function RunDanceCamClose()
+    local root = CinGetRoot(); if not root then return end
+    local dur  = CinD(10)
+
+    local swingAmt  = CFG.OrbitRadius * 0.30
+    local bobAmt    = 0.28
+    local tiltAmt   = 6
+    local beatHz    = 2.2
+    local dist      = math.max(CFG.OrbitRadius * 0.42, 1.8)
+    local lookH     = 2.1   -- fokus ke area kepala
+
+    local function noise(s, f) return math.sin(tick()*f + s)*0.4 + math.sin(tick()*f*2.1+s)*0.2 end
+
+    local t0 = tick()
+    CIN.Conn = RunService.RenderStepped:Connect(function(dt)
+        if not CIN.Playing then return end
+        local r = CinGetRoot(); if not r then return end
+        local elapsed  = tick() - t0
+        local tNorm    = math.clamp(elapsed / dur, 0, 1)
+
+        local beat   = math.sin(elapsed * beatHz * math.pi * 2)
+        local beatSq = math.sin(elapsed * beatHz * math.pi * 2 + math.pi/2)
+
+        local fwd    = r.CFrame.LookVector
+        local right  = r.CFrame.RightVector
+        local dirVec = (CIN.Facing == "Front") and (-fwd) or (fwd)
+
+        local swingOff = right * (beat * swingAmt)
+        local bobOff   = Vector3.new(0, beatSq * bobAmt + noise(3,1.3)*0.10, 0)
+
+        local camPos3  = r.Position
+                       + dirVec * dist
+                       + Vector3.new(0, CFG.OrbitHeight * 0.6 + lookH * 0.4, 0)
+                       + swingOff + bobOff
+
+        local lookPt   = r.Position + Vector3.new(0, lookH, 0)
+
+        local rollDeg  = -beat * tiltAmt
+        local baseCF   = CFrame.lookAt(camPos3, lookPt)
+        Camera.CFrame  = baseCF * CFrame.Angles(0, 0, math.rad(rollDeg))
+
+        -- FOV sempit untuk efek portrait / close-up
+        local closeFOV = math.clamp(tgtFOV * 0.65, 20, 60)
+        Camera.FieldOfView = math.clamp(closeFOV + beatSq * 1.5, CFG.MinFOV, CFG.MaxFOV)
+
+        if tNorm >= 1 then CinStopShot() end
+    end)
+end
+
 -- Isi ShotFns (forward declaration dari atas)
-ShotFns.DroneIn    = RunDroneIn
-ShotFns.DroneOut   = RunDroneOut
-ShotFns.Orbit360   = RunOrbit360
-ShotFns.CinPan     = RunCinPan
-ShotFns.CinPanRL   = RunCinPanRL
-ShotFns.Reveal     = RunReveal
-ShotFns.RevealDown = RunRevealDown
-ShotFns.DollyIn    = RunDollyIn
-ShotFns.DollyOut   = RunDollyOut
+ShotFns.DroneIn       = RunDroneIn
+ShotFns.DroneOut      = RunDroneOut
+ShotFns.Orbit360      = RunOrbit360
+ShotFns.CinPan        = RunCinPan
+ShotFns.CinPanRL      = RunCinPanRL
+ShotFns.Reveal        = RunReveal
+ShotFns.RevealDown    = RunRevealDown
+ShotFns.DollyIn       = RunDollyIn
+ShotFns.DollyOut      = RunDollyOut
+ShotFns.DanceCam      = RunDanceCam
+ShotFns.DanceCamHype  = RunDanceCamHype
+ShotFns.DanceCamClose = RunDanceCamClose
 
 -- Connect shot buttons (click sudah di-wire langsung di build loop di atas)
 BStopCin.MouseButton1Click:Connect(CinStopShot)
@@ -1789,6 +1964,7 @@ task.spawn(function()
     print("  FREE     : WASD+Q/E gerak | RMB rotate")
     print("  ORBIT    : Isi UserId/Username → CARI → ORBIT")
     print("  CINEMATIC: Scroll ke '🎬 CINEMATIC SHOTS' → pilih shot → play")
+    print("  DANCE    : 🕺 Dance Cam / 🔥 HYPE / 🤳 CLOSE — kamera goyang fokus player")
     print("  ARAH     : Scroll ke '📷 ARAH KAMERA' → toggle Depan/Belakang")
     print("  SHARED   : Speed/Radius/Height di Orbit Card = dipakai juga oleh Cinematic")
     print("  ESP      : Tap kartu ESP untuk ON/OFF")
