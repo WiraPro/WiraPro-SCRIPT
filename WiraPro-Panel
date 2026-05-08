@@ -5,7 +5,8 @@
 -- ║   · Zero Fall Damage  [Z]                                    ║
 -- ║   · Infinite Jump  [J]                                       ║
 -- ║   · Speed Run + slider kecepatan lari  [R]                   ║
--- ║   · ESP — nama + jarak semua player  [E]  ← NEW             ║
+-- ║   · ESP — nama + jarak semua player  [E]                     ║
+-- ║   · Fullbright — terang maksimal  [B]             ← NEW     ║
 -- ║   · Reset All — kembalikan semua ke normal  [0]              ║
 -- ║   · Unload Script — hapus UI & pulihkan karakter             ║
 -- ║   · UI Glass Dark — transparan, tanpa emoji                  ║
@@ -19,6 +20,7 @@ local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService       = game:GetService("RunService")
 local TweenService     = game:GetService("TweenService")
+local Lighting         = game:GetService("Lighting")   -- ← NEW
 
 local player    = Players.LocalPlayer
 local playerGui = player.PlayerGui
@@ -35,7 +37,8 @@ local KEY_NC     = Enum.KeyCode.N
 local KEY_ZFD    = Enum.KeyCode.Z
 local KEY_IJ     = Enum.KeyCode.J
 local KEY_RUN    = Enum.KeyCode.R
-local KEY_ESP    = Enum.KeyCode.E   -- ← NEW
+local KEY_ESP    = Enum.KeyCode.E
+local KEY_FB     = Enum.KeyCode.B   -- ← NEW  Fullbright
 local KEY_RESET  = Enum.KeyCode.Zero
 
 -- ══════════════════════════════════════════
@@ -55,7 +58,8 @@ local C = {
     AccentRun  = Color3.fromRGB(220, 175,   0),
     AccentRst  = Color3.fromRGB(240,  55,  55),
     AccentUld  = Color3.fromRGB(140, 140, 190),
-    AccentESP  = Color3.fromRGB(  0, 220, 180),   -- ← NEW cyan-teal
+    AccentESP  = Color3.fromRGB(  0, 220, 180),
+    AccentFB   = Color3.fromRGB(255, 230,  80),   -- ← NEW  kuning terang
 
     -- Warna tombol
     BtnFlyOff  = Color3.fromRGB( 50, 120, 220),
@@ -68,8 +72,10 @@ local C = {
     BtnIJOn    = Color3.fromRGB(  0, 195, 240),
     BtnRunOff  = Color3.fromRGB(175, 130,   0),
     BtnRunOn   = Color3.fromRGB(205, 158,   0),
-    BtnEspOff  = Color3.fromRGB(  0, 130, 110),   -- ← NEW
-    BtnEspOn   = Color3.fromRGB(  0, 185, 150),   -- ← NEW
+    BtnEspOff  = Color3.fromRGB(  0, 130, 110),
+    BtnEspOn   = Color3.fromRGB(  0, 185, 150),
+    BtnFbOff   = Color3.fromRGB(160, 130,   0),   -- ← NEW  emas gelap
+    BtnFbOn    = Color3.fromRGB(210, 180,   0),   -- ← NEW  emas terang
     BtnRst     = Color3.fromRGB(200,  30,  30),
     BtnUld     = Color3.fromRGB( 90,  90, 130),
 
@@ -85,22 +91,26 @@ local C = {
 -- ══════════════════════════════════════════
 -- STATE
 -- ══════════════════════════════════════════
-local isFlying    = false
-local isNoclip    = false
-local isZFD       = false
-local isInfJump   = false
-local isSpeedRun  = false
-local isESP       = false   -- ← NEW
-local flySpeed    = FLY_DEF
-local runSpeed    = RUN_DEF
-local bVelocity   = nil
-local bGyro       = nil
-local noclipConn  = nil
-local zfdConn     = nil
-local ijConn      = nil
-local espConn     = nil     -- ← NEW
-local isMinimized = false
-local dragging    = false
+local isFlying      = false
+local isNoclip      = false
+local isZFD         = false
+local isInfJump     = false
+local isSpeedRun    = false
+local isESP         = false
+local isFullbright  = false   -- ← NEW
+local flySpeed      = FLY_DEF
+local runSpeed      = RUN_DEF
+local bVelocity     = nil
+local bGyro         = nil
+local noclipConn    = nil
+local zfdConn       = nil
+local ijConn        = nil
+local espConn       = nil
+local isMinimized   = false
+local dragging      = false
+
+-- Simpan nilai Lighting asli sebelum Fullbright  ← NEW
+local origAmbient, origOutdoorAmbient, origBrightness, origFogEnd, origGlobalShadows
 
 -- ══════════════════════════════════════════
 -- SCREENGUI
@@ -135,7 +145,7 @@ end
 local PANEL_W   = 244
 local TITLE_H   = 36
 local BODY_H    = 240
-local CONTENT_H = 590        -- ← naik lagi untuk section Teleport
+local CONTENT_H = 632        -- ← naik 42 untuk tombol Fullbright
 local PANEL_H   = TITLE_H + BODY_H
 local MINI_W    = 190
 
@@ -347,22 +357,26 @@ end
 --   Slider Fly   (y=180)
 --   Slider Run   (y=218)
 --   NO CLIP      (y=262)
---   ESP          (y=304)  ← NEW
---   divider      (y=346)
---   hint         (y=352)
---   divider merah(y=376)
---   RESET ALL    (y=384)
---   UNLOAD SCRIPT(y=426)
+--   ESP          (y=304)
+--   FULLBRIGHT   (y=346)  ← NEW
+--   divider      (y=388)
+--   TELEPORT hdr (y=396)
+--   tpList       (y=414)
+--   divider      (y=506)
+--   hint         (y=512)
+--   divider merah(y=536)
+--   RESET ALL    (y=544)
+--   UNLOAD SCRIPT(y=586)
 -- ══════════════════════════════════════════
 
 -- FLY
-local flyBtn,  flyStk  = makeBtn(body,   10, "FLY  OFF",       C.BtnFlyOff, C.AccentOn,   36)
+local flyBtn,  flyStk  = makeBtn(body,   10, "FLY  OFF",         C.BtnFlyOff, C.AccentOn,   36)
 -- FALL DMG
-local zfdBtn,  zfdStk  = makeBtn(body,   54, "FALL DMG  OFF",  C.BtnZfdOff, C.AccentZfd,  34)
+local zfdBtn,  zfdStk  = makeBtn(body,   54, "FALL DMG  OFF",    C.BtnZfdOff, C.AccentZfd,  34)
 -- INF JUMP
-local ijBtn,   ijStk   = makeBtn(body,   96, "INF JUMP  OFF",  C.BtnIJOff,  C.AccentIJ,   34)
+local ijBtn,   ijStk   = makeBtn(body,   96, "INF JUMP  OFF",    C.BtnIJOff,  C.AccentIJ,   34)
 -- SPEED RUN
-local runBtn,  runStk  = makeBtn(body,  138, "SPEED RUN  OFF", C.BtnRunOff, C.AccentRun,  34)
+local runBtn,  runStk  = makeBtn(body,  138, "SPEED RUN  OFF",   C.BtnRunOff, C.AccentRun,  34)
 
 -- Warna teks tombol
 flyBtn.TextColor3  = Color3.fromRGB(220, 240, 255)
@@ -382,12 +396,16 @@ local runLbl, runTrack, runFill, runKnob =
 local ncBtn, ncStk = makeBtn(body, 262, "NO CLIP  OFF", C.BtnNcOff, C.AccentNc, 34)
 ncBtn.TextColor3 = Color3.fromRGB(255, 235, 210)
 
--- ── ESP ─────────────────────────────────────  ← NEW
+-- ── ESP ─────────────────────────────────────
 local espBtn, espStk = makeBtn(body, 304, "ESP  OFF", C.BtnEspOff, C.AccentESP, 34)
 espBtn.TextColor3 = Color3.fromRGB(200, 255, 245)
 
+-- ── FULLBRIGHT ──────────────────────────────  ← NEW
+local fbBtn, fbStk = makeBtn(body, 346, "FULLBRIGHT  OFF", C.BtnFbOff, C.AccentFB, 34)
+fbBtn.TextColor3 = Color3.fromRGB(255, 248, 200)
+
 -- ── Garis pemisah ──────────────────────────
-makeDivider(body, 346, C.Accent)
+makeDivider(body, 388, C.Accent)   -- posisi digeser +42
 
 -- ══════════════════════════════════════════
 -- SECTION: TELEPORT TO PLAYER
@@ -395,7 +413,7 @@ makeDivider(body, 346, C.Accent)
 
 -- Header label section
 local tpHeader = Instance.new("TextLabel")
-tpHeader.Size=UDim2.new(1,-20,0,14); tpHeader.Position=UDim2.new(0,10,0,354)
+tpHeader.Size=UDim2.new(1,-20,0,14); tpHeader.Position=UDim2.new(0,10,0,396)  -- +42
 tpHeader.BackgroundTransparency=1
 tpHeader.Text="TELEPORT TO PLAYER"
 tpHeader.TextColor3=Color3.fromRGB(170,170,210); tpHeader.TextSize=9
@@ -405,7 +423,7 @@ tpHeader.ZIndex=5; tpHeader.Parent=body
 
 -- Badge jumlah player (kanan atas header)
 local tpCount = Instance.new("TextLabel")
-tpCount.Size=UDim2.new(0,50,0,14); tpCount.Position=UDim2.new(1,-60,0,354)
+tpCount.Size=UDim2.new(0,50,0,14); tpCount.Position=UDim2.new(1,-60,0,396)   -- +42
 tpCount.BackgroundTransparency=1
 tpCount.Text="0 player"; tpCount.TextColor3=Color3.fromRGB(100,100,140)
 tpCount.TextSize=8; tpCount.Font=Enum.Font.Gotham
@@ -416,8 +434,8 @@ tpCount.ZIndex=5; tpCount.Parent=body
 local tpList = Instance.new("ScrollingFrame")
 tpList.Name                 = "TeleportList"
 tpList.Size                 = UDim2.new(1,-20,0,84)
-tpList.Position             = UDim2.new(0,10,0,372)
-tpList.CanvasSize           = UDim2.new(0,0,0,0)   -- diupdate dinamis
+tpList.Position             = UDim2.new(0,10,0,414)   -- +42
+tpList.CanvasSize           = UDim2.new(0,0,0,0)
 tpList.ScrollBarThickness   = 2
 tpList.ScrollBarImageColor3 = Color3.fromRGB(0,220,180)
 tpList.ScrollBarImageTransparency = 0.40
@@ -442,26 +460,26 @@ tpEmpty.TextXAlignment=Enum.TextXAlignment.Center
 tpEmpty.ZIndex=6; tpEmpty.Parent=tpList
 
 -- ── Garis pemisah ──────────────────────────
-makeDivider(body, 464, C.Accent)
+makeDivider(body, 506, C.Accent)   -- +42
 
 -- ── Hint hotkey ────────────────────────────
 local hintLbl = Instance.new("TextLabel")
-hintLbl.Size=UDim2.new(1,-20,0,20); hintLbl.Position=UDim2.new(0,10,0,470)
+hintLbl.Size=UDim2.new(1,-20,0,20); hintLbl.Position=UDim2.new(0,10,0,512)   -- +42
 hintLbl.BackgroundTransparency=1
-hintLbl.Text="[F]fly  [Z]fall  [J]jump  [R]run  [N]clip  [E]esp  [0]reset"
+hintLbl.Text="[F]fly  [Z]fall  [J]jump  [R]run  [N]clip  [E]esp  [B]bright  [0]reset"
 hintLbl.TextColor3=C.TextDim; hintLbl.TextSize=8; hintLbl.Font=Enum.Font.Gotham
 hintLbl.TextXAlignment=Enum.TextXAlignment.Center
 hintLbl.TextWrapped=true; hintLbl.ZIndex=5; hintLbl.Parent=body
 
 -- ── Garis pemisah merah ─────────────────────
-makeDivider(body, 494, C.AccentRst)
+makeDivider(body, 536, C.AccentRst)   -- +42
 
 -- ── RESET ALL ───────────────────────────────
-local rstBtn, rstStk = makeBtn(body, 502, "RESET ALL", C.BtnRst, C.AccentRst, 34)
+local rstBtn, rstStk = makeBtn(body, 544, "RESET ALL", C.BtnRst, C.AccentRst, 34)   -- +42
 rstBtn.TextColor3 = Color3.fromRGB(255, 210, 210)
 
 -- ── UNLOAD SCRIPT ───────────────────────────
-local uldBtn, uldStk = makeBtn(body, 544, "UNLOAD SCRIPT", C.BtnUld, C.AccentUld, 34)
+local uldBtn, uldStk = makeBtn(body, 586, "UNLOAD SCRIPT", C.BtnUld, C.AccentUld, 34)   -- +42
 uldBtn.TextColor3 = Color3.fromRGB(200, 200, 225)
 
 -- ══════════════════════════════════════════
@@ -607,12 +625,13 @@ local function setPanelAccent(col)
 end
 
 local function getTopAccent()
-    if isFlying   then return C.AccentOn  end
-    if isESP      then return C.AccentESP end   -- ← NEW
-    if isNoclip   then return C.AccentNc  end
-    if isZFD      then return C.AccentZfd end
-    if isInfJump  then return C.AccentIJ  end
-    if isSpeedRun then return C.AccentRun end
+    if isFlying      then return C.AccentOn  end
+    if isFullbright  then return C.AccentFB  end   -- ← NEW
+    if isESP         then return C.AccentESP end
+    if isNoclip      then return C.AccentNc  end
+    if isZFD         then return C.AccentZfd end
+    if isInfJump     then return C.AccentIJ  end
+    if isSpeedRun    then return C.AccentRun end
     return C.Accent
 end
 
@@ -686,7 +705,7 @@ local function updateUI_Run(on)
     refreshAccent()
 end
 
--- ── ESP UI Update ───────────────────────── ← NEW
+-- ── ESP UI Update ───────────────────────────
 local function updateUI_ESP(on)
     if on then
         espBtn.Text="ESP  ON"
@@ -700,6 +719,22 @@ local function updateUI_ESP(on)
     refreshAccent()
 end
 
+-- ── Fullbright UI Update ────────────────────  ← NEW
+local function updateUI_FB(on)
+    if on then
+        fbBtn.Text="FULLBRIGHT  ON"
+        TweenService:Create(fbBtn,TweenInfo.new(0.2),{BackgroundColor3=C.BtnFbOn}):Play()
+        TweenService:Create(fbStk,TweenInfo.new(0.2),{Transparency=0.10}):Play()
+        titleLbl.Text="WiraPro Panel  — BRIGHT"; titleLbl.TextColor3=C.AccentFB
+    else
+        fbBtn.Text="FULLBRIGHT  OFF"
+        TweenService:Create(fbBtn,TweenInfo.new(0.2),{BackgroundColor3=C.BtnFbOff}):Play()
+        TweenService:Create(fbStk,TweenInfo.new(0.2),{Transparency=0.45}):Play()
+        titleLbl.Text="WiraPro Panel  V0.8"; titleLbl.TextColor3=C.Text
+    end
+    refreshAccent()
+end
+
 -- ══════════════════════════════════════════
 -- TELEPORT TO PLAYER
 -- ══════════════════════════════════════════
@@ -709,12 +744,10 @@ local function teleportToPlayer(target)
     local tChar  = target.Character
     local tRoot  = tChar  and tChar:FindFirstChild("HumanoidRootPart")
     if not myRoot or not tRoot then return end
-    -- Offset sedikit agar tidak muncul persis di dalam body target
     myRoot.CFrame = tRoot.CFrame * CFrame.new(0, 0, -3)
 end
 
 local function refreshPlayerList()
-    -- Hapus semua tombol lama di list
     for _, child in ipairs(tpList:GetChildren()) do
         if child.Name ~= "TpEmpty" then child:Destroy() end
     end
@@ -724,7 +757,6 @@ local function refreshPlayerList()
         if p ~= player then table.insert(others, p) end
     end
 
-    -- Update badge count
     tpCount.Text = #others .. " player"
 
     if #others == 0 then
@@ -754,7 +786,6 @@ local function refreshPlayerList()
         local stk=Instance.new("UIStroke",btn)
         stk.Color=Color3.fromRGB(0,200,160); stk.Thickness=1.0; stk.Transparency=0.55
 
-        -- Ikon panah kanan
         local arrow = Instance.new("TextLabel")
         arrow.Size=UDim2.new(0,18,1,0); arrow.Position=UDim2.new(1,-20,0,0)
         arrow.BackgroundTransparency=1
@@ -763,7 +794,6 @@ local function refreshPlayerList()
         arrow.TextXAlignment=Enum.TextXAlignment.Center
         arrow.ZIndex=8; arrow.Parent=btn
 
-        -- Padding kiri teks
         local pad = Instance.new("UIPadding")
         pad.PaddingLeft=UDim.new(0,8); pad.Parent=btn
 
@@ -776,11 +806,9 @@ local function refreshPlayerList()
                 {BackgroundColor3=Color3.fromRGB(0,110,88),BackgroundTransparency=0.38}):Play()
         end)
 
-        -- Simpan referensi player untuk closure
         local targetPlayer = p
         btn.MouseButton1Click:Connect(function()
             teleportToPlayer(targetPlayer)
-            -- Flash hijau singkat sebagai konfirmasi
             TweenService:Create(btn,TweenInfo.new(0.08),
                 {BackgroundColor3=Color3.fromRGB(40,220,140),BackgroundTransparency=0.10}):Play()
             task.delay(0.35,function()
@@ -792,13 +820,12 @@ local function refreshPlayerList()
         end)
     end
 
-    -- Update tinggi canvas list
     local totalH = #others * (BTN_H + BTN_GAP) + 8
     tpList.CanvasSize = UDim2.new(0, 0, 0, totalH)
 end
 
 -- ══════════════════════════════════════════
--- ESP HELPERS                              ← NEW
+-- ESP HELPERS
 -- ══════════════════════════════════════════
 local function createESPFor(target)
     if target == player then return end
@@ -807,7 +834,6 @@ local function createESPFor(target)
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
 
-    -- Hapus label lama kalau ada
     local old = root:FindFirstChild("WiraESP")
     if old then old:Destroy() end
 
@@ -819,7 +845,6 @@ local function createESPFor(target)
     bb.ResetOnSpawn = false
     bb.Parent       = root
 
-    -- Satu TextLabel — nama + jarak, tanpa kotak
     local lbl = Instance.new("TextLabel")
     lbl.Name                   = "ESPLabel"
     lbl.Size                   = UDim2.new(1, 0, 1, 0)
@@ -845,17 +870,15 @@ local function removeESPFor(target)
 end
 
 -- ══════════════════════════════════════════
--- ENABLE / DISABLE — ESP               ← NEW
+-- ENABLE / DISABLE — ESP
 -- ══════════════════════════════════════════
 local function enableESP()
     if isESP then return end; isESP = true
 
-    -- Buat label untuk semua player yang sudah ada
     for _, p in ipairs(Players:GetPlayers()) do
         createESPFor(p)
     end
 
-    -- Loop update jarak setiap frame
     espConn = RunService.Heartbeat:Connect(function()
         local myChar = player.Character
         local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
@@ -865,13 +888,11 @@ local function enableESP()
                 local char = p.Character
                 local root = char and char:FindFirstChild("HumanoidRootPart")
                 if root then
-                    -- Buat ulang label kalau hilang (respawn)
                     local bb = root:FindFirstChild("WiraESP")
                     if not bb then
                         createESPFor(p)
                         bb = root:FindFirstChild("WiraESP")
                     end
-                    -- Update jarak
                     if bb then
                         local lbl = bb:FindFirstChild("ESPLabel")
                         if lbl then
@@ -896,11 +917,48 @@ end
 local function disableESP()
     if not isESP then return end; isESP = false
     if espConn then espConn:Disconnect(); espConn = nil end
-    -- Hapus semua label ESP
     for _, p in ipairs(Players:GetPlayers()) do
         removeESPFor(p)
     end
     updateUI_ESP(false)
+end
+
+-- ══════════════════════════════════════════
+-- ENABLE / DISABLE — FULLBRIGHT           ← NEW
+-- ══════════════════════════════════════════
+local function enableFullbright()
+    if isFullbright then return end; isFullbright = true
+
+    -- Simpan nilai Lighting asli
+    origAmbient        = Lighting.Ambient
+    origOutdoorAmbient = Lighting.OutdoorAmbient
+    origBrightness     = Lighting.Brightness
+    origFogEnd         = Lighting.FogEnd
+    origGlobalShadows  = Lighting.GlobalShadows
+
+    -- Terapkan Fullbright
+    Lighting.Ambient        = Color3.fromRGB(255, 255, 255)
+    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+    Lighting.Brightness     = 2
+    Lighting.FogEnd         = 1e6   -- hapus kabut
+    Lighting.GlobalShadows  = false
+
+    updateUI_FB(true)
+end
+
+local function disableFullbright()
+    if not isFullbright then return end; isFullbright = false
+
+    -- Pulihkan nilai Lighting asli
+    if origAmbient then
+        Lighting.Ambient        = origAmbient
+        Lighting.OutdoorAmbient = origOutdoorAmbient
+        Lighting.Brightness     = origBrightness
+        Lighting.FogEnd         = origFogEnd
+        Lighting.GlobalShadows  = origGlobalShadows
+    end
+
+    updateUI_FB(false)
 end
 
 -- ══════════════════════════════════════════
@@ -1042,7 +1100,8 @@ local function resetAll()
     disableZFD()
     disableInfJump()
     disableSpeedRun()
-    disableESP()   -- ← NEW
+    disableESP()
+    disableFullbright()   -- ← NEW
 
     local char=player.Character
     if char then
@@ -1078,7 +1137,8 @@ local function unloadScript()
     disableZFD()
     disableInfJump()
     disableSpeedRun()
-    disableESP()   -- ← NEW
+    disableESP()
+    disableFullbright()   -- ← NEW  pulihkan Lighting sebelum unload
 
     local char=player.Character
     if char then
@@ -1118,8 +1178,11 @@ end)
 runBtn.MouseButton1Click:Connect(function()
     if isSpeedRun then disableSpeedRun() else enableSpeedRun() end
 end)
-espBtn.MouseButton1Click:Connect(function()   -- ← NEW
+espBtn.MouseButton1Click:Connect(function()
     if isESP then disableESP() else enableESP() end
+end)
+fbBtn.MouseButton1Click:Connect(function()   -- ← NEW
+    if isFullbright then disableFullbright() else enableFullbright() end
 end)
 rstBtn.MouseButton1Click:Connect(resetAll)
 uldBtn.MouseButton1Click:Connect(unloadScript)
@@ -1130,12 +1193,13 @@ uldBtn.MouseButton1Click:Connect(unloadScript)
 UserInputService.InputBegan:Connect(function(inp, gp)
     if gp then return end
     local k=inp.KeyCode
-    if     k==KEY_FLY   then if isFlying   then disableFly()       else enableFly()       end
-    elseif k==KEY_NC    then if isNoclip   then disableNoclip()     else enableNoclip()    end
-    elseif k==KEY_ZFD   then if isZFD      then disableZFD()        else enableZFD()       end
-    elseif k==KEY_IJ    then if isInfJump  then disableInfJump()    else enableInfJump()   end
-    elseif k==KEY_RUN   then if isSpeedRun then disableSpeedRun()   else enableSpeedRun()  end
-    elseif k==KEY_ESP   then if isESP      then disableESP()        else enableESP()       end  -- ← NEW
+    if     k==KEY_FLY   then if isFlying      then disableFly()         else enableFly()         end
+    elseif k==KEY_NC    then if isNoclip      then disableNoclip()       else enableNoclip()      end
+    elseif k==KEY_ZFD   then if isZFD         then disableZFD()          else enableZFD()         end
+    elseif k==KEY_IJ    then if isInfJump     then disableInfJump()      else enableInfJump()     end
+    elseif k==KEY_RUN   then if isSpeedRun    then disableSpeedRun()     else enableSpeedRun()    end
+    elseif k==KEY_ESP   then if isESP         then disableESP()          else enableESP()         end
+    elseif k==KEY_FB    then if isFullbright  then disableFullbright()   else enableFullbright()  end  -- ← NEW
     elseif k==KEY_RESET then resetAll()
     end
 end)
@@ -1203,15 +1267,15 @@ player.CharacterAdded:Connect(function()
         end
     end
 
-    -- ESP: reconnect loop saat respawn (label player lain tetap hidup)
-    -- espConn masih aktif, label di-recreate otomatis oleh loop saat root baru muncul
+    -- Fullbright tidak reset saat respawn — Lighting tetap terjaga
+    -- (Lighting tidak terikat ke karakter, jadi tidak perlu reconnect)
 end)
 
 -- ══════════════════════════════════════════
 -- TELEPORT LIST — AUTO REFRESH
 -- ══════════════════════════════════════════
 Players.PlayerAdded:Connect(function()
-    task.wait(0.5)   -- tunggu sebentar agar data player siap
+    task.wait(0.5)
     refreshPlayerList()
 end)
 
@@ -1226,6 +1290,6 @@ refreshPlayerList()
 warn("╔══════════════════════════════════════════╗")
 warn("║  WiraPro Panel V0.8  — Glass Dark UI     ║")
 warn("║  [F]Fly [Z]FallDmg [J]Jump [R]SpeedRun  ║")
-warn("║  [N]Noclip  [E]ESP  [0]ResetAll          ║")
-warn("║  Teleport: klik nama player di panel     ║")
+warn("║  [N]Noclip  [E]ESP  [B]Fullbright        ║")
+warn("║  [0]ResetAll  | Teleport: klik nama      ║")
 warn("╚══════════════════════════════════════════╝")
