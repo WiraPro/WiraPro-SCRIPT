@@ -5,7 +5,6 @@
 -- ║   + Zoom Roll IN/OUT — roll kamera, target tetap tengah ║
 -- ║   + Shared Speed/Radius/Height · Auto-hide UI on Shot   ║
 -- ╚══════════════════════════════════════════════════════════╝
--- (auto) forward declarations to stay within Lua's 200-local main-chunk limit
 local BStopCin, BtnFree, BtnOrbit, CFG, CIN, Camera
 local InputBox, LED, MainPanel, MinBtn, PANEL_H, Player
 local PlayerGui, Players, RunService, ScreenGui, ScrollFrame, ShotBtns
@@ -357,6 +356,18 @@ do
 PANEL_H=500
 MainPanel=makeGlass(ScreenGui,UDim2.new(0,244,0,PANEL_H),UDim2.new(0.5,-122,0.5,-250),"MainPanel",UDim.new(0,18),0.60)
 MainPanel.ZIndex=10
+
+-- Responsive scaling: panel otomatis menyesuaikan ukuran layar (HP/Tablet/PC)
+local UIScale=Instance.new("UIScale"); UIScale.Parent=MainPanel
+local function updatePanelScale()
+    local vp=Camera.ViewportSize
+    local minSide=math.min(vp.X,vp.Y)
+    -- HP (layar kecil) → scale lebih kecil, Tablet/PC (layar besar) → scale normal/lebih besar
+    local scale=math.clamp(minSide/700,0.55,1.15)
+    UIScale.Scale=scale
+end
+updatePanelScale()
+Camera:GetPropertyChangedSignal("ViewportSize"):Connect(updatePanelScale)
 
 -- TITLE BAR
 local TBar=Instance.new("Frame"); TBar.Size=UDim2.new(1,0,0,44)
