@@ -1,24 +1,43 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║   WiraPro FREECAM V3.8  +  Cinematic Edition            ║
+-- ║   WiraPro FREECAM V3.9  +  Cinematic Edition            ║
 -- ║   Y2K Glass · FreeCam · Orbit · Teleport · ESP          ║
 -- ║   + Cinematic Shots · Direction (Front/Back)             ║
+-- ║   + Zoom Roll IN/OUT — roll kamera, target tetap tengah ║
 -- ║   + Shared Speed/Radius/Height · Auto-hide UI on Shot   ║
 -- ╚══════════════════════════════════════════════════════════╝
+local BStopCin, BtnFree, BtnOrbit, CFG, CIN, Camera
+local InputBox, LED, MainPanel, MinBtn, PANEL_H, Player
+local PlayerGui, Players, RunService, ScreenGui, ScrollFrame, ShotBtns
+local ShotFns, THEMES, TitleLabel, ToggleCard, ToggleClick, ToggleLbl
+local ToggleSub, TweenService, UserInputService, activeThemeId, applyTheme, camCF
+local camPos, curFOV, currentMiniW, disableFreecam, draggingPanel, espActive
+local espCard, espLED, espLabels, espToggleClick, espToggleLbl, espToggleSub
+local feedbackLbl, freecamActive, hideOthers, isMinimized, lastRight, leftActive
+local leftCur, leftId, leftStart, makeButton, makeCardSlider, makeGlass
+local makeLabel, makeModeBtn, makeSep, mode, orbitAngle, orbitStatusLbl
+local orbitTarget, pitch, reg, resetFOV, resetOrbitH, resetOrbitRad
+local resetOrbitSpd, resetOrbitTarget, resetSpeed, resetTilt, rightActive, rightId
+local roll, sFree, sOrbit, savedCamType, savedFOV, showOthers
+local targetCF, teleportToPlayer, tgtFOV, updateDirHL, updateModeHL, yaw
+
+do
 -- StarterPlayer → StarterPlayerScripts  (LocalScript)
 
-local Players          = game:GetService("Players")
-local RunService       = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local TweenService     = game:GetService("TweenService")
+Players          = game:GetService("Players")
+RunService       = game:GetService("RunService")
+UserInputService = game:GetService("UserInputService")
+TweenService     = game:GetService("TweenService")
 
-local Player    = Players.LocalPlayer
-local PlayerGui = Player:WaitForChild("PlayerGui")
-local Camera    = workspace.CurrentCamera
+Player    = Players.LocalPlayer
+PlayerGui = Player:WaitForChild("PlayerGui")
+Camera    = workspace.CurrentCamera
 
+end
 -- ══════════════════════════════════════════
 -- CFG — Palette: Ember (default)
 -- ══════════════════════════════════════════
-local CFG = {
+do
+CFG = {
     MoveSpeed=0.05, RotateSpeed=0.004,
     MinFOV=10, MaxFOV=120, DefaultFOV=70,
     FishEyeFOV=110, DollyFOV=20, SmoothFactor=0.12,
@@ -34,10 +53,12 @@ local CFG = {
     OnCoral   = Color3.fromRGB( 15, 15, 15),
 }
 
+end
 -- ══════════════════════════════════════════
 -- COLOUR THEMES  (5 preset)
 -- ══════════════════════════════════════════
-local THEMES = {
+do
+THEMES = {
     {
         id="ember", name="White", swatch=Color3.fromRGB(255,255,255),
         BgBase    =Color3.fromRGB( 18, 18, 18),
@@ -99,17 +120,19 @@ local THEMES = {
         OnCoral   =Color3.fromRGB(255,255,255),
     },
 }
-local activeThemeId = "ember"
+activeThemeId = "ember"
 
+end
 -- ══════════════════════════════════════════
 -- COLOR REGISTRY
 -- ══════════════════════════════════════════
+do
 local colorRegistry = {}
-local function reg(obj, prop, key)
+function reg(obj, prop, key)
     table.insert(colorRegistry, { obj=obj, prop=prop, key=key })
 end
 
-local function applyTheme(theme)
+function applyTheme(theme)
     local keys = {"BgBase","BgCard","Coral","CoralLight","CoralDim","CoralGlow","Cream","CreamDim","OnCoral"}
     for _,k in ipairs(keys) do CFG[k] = theme[k] end
     activeThemeId = theme.id
@@ -122,44 +145,52 @@ local function applyTheme(theme)
     end
 end
 
+end
 -- ══════════════════════════════════════════
 -- STATE
 -- ══════════════════════════════════════════
-local mode="free"; local freecamActive=false; local isMinimized=false
-local draggingPanel=false
-local camPos=Vector3.new(0,10,0); local camCF=CFrame.new(0,10,0); local targetCF=CFrame.new(0,10,0)
-local yaw,pitch,roll=0,0,0; local curFOV=CFG.DefaultFOV; local tgtFOV=CFG.DefaultFOV
-local savedCamType=nil; local savedFOV=CFG.DefaultFOV
-local orbitAngle=0; local orbitTarget=nil
-local leftActive=false; local rightActive=false; local leftId=nil; local rightId=nil
-local leftStart=Vector2.new(0,0); local leftCur=Vector2.new(0,0); local lastRight=Vector2.new(0,0)
-local espActive=false; local espLabels={}
+do
+mode="free"; freecamActive=false; isMinimized=false
+draggingPanel=false
+camPos=Vector3.new(0,10,0); camCF=CFrame.new(0,10,0); targetCF=CFrame.new(0,10,0)
+yaw,pitch,roll=0,0,0; curFOV=CFG.DefaultFOV; tgtFOV=CFG.DefaultFOV
+savedCamType=nil; savedFOV=CFG.DefaultFOV
+orbitAngle=0; orbitTarget=nil
+leftActive=false; rightActive=false; leftId=nil; rightId=nil
+leftStart=Vector2.new(0,0); leftCur=Vector2.new(0,0); lastRight=Vector2.new(0,0)
+espActive=false; espLabels={}
 
+end
 -- ══════════════════════════════════════════
 -- CINEMATIC STATE  ← NEW
 -- ══════════════════════════════════════════
-local CIN = {
+do
+CIN = {
     Facing   = "Front",
     Playing  = false,
     Conn     = nil,
     ActiveKey= nil,
 }
-local ShotBtns = {}
+ShotBtns = {}
 -- Forward declarations — diisi setelah run-functions didefinisikan
 local CinStartShot  -- function(k, fn)
-local ShotFns = {}  -- populated after Run* functions defined
+ShotFns = {}  -- populated after Run* functions defined
 
+end
 -- ══════════════════════════════════════════
 -- SCREENGUI
 -- ══════════════════════════════════════════
-local ScreenGui=Instance.new("ScreenGui")
+do
+ScreenGui=Instance.new("ScreenGui")
 ScreenGui.Name="WiraProFreecam"; ScreenGui.ResetOnSpawn=false
 ScreenGui.DisplayOrder=999; ScreenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent=PlayerGui
 
+end
 -- ══════════════════════════════════════════
 -- UI PERSISTENCE PROTECTION
 -- ══════════════════════════════════════════
+do
 local function enforceUIVisibility()
     if not ScreenGui or not ScreenGui.Parent then
         ScreenGui=Instance.new("ScreenGui")
@@ -191,10 +222,12 @@ PlayerGui.DescendantAdded:Connect(function(obj)
     end
 end)
 
+end
 -- ══════════════════════════════════════════
 -- UI HELPERS
 -- ══════════════════════════════════════════
-local function makeGlass(parent,size,pos,name,radius,alpha)
+do
+function makeGlass(parent,size,pos,name,radius,alpha)
     radius=radius or UDim.new(0,16); alpha=alpha or 0.62
     local f=Instance.new("Frame"); f.Name=name or "Glass"; f.Size=size
     f.Position=pos or UDim2.new(0,0,0,0); f.BackgroundColor3=CFG.BgBase
@@ -214,7 +247,7 @@ local function makeGlass(parent,size,pos,name,radius,alpha)
     return f
 end
 
-local function makeLabel(parent,text,size,pos,fs,bold,col,ax)
+function makeLabel(parent,text,size,pos,fs,bold,col,ax)
     local l=Instance.new("TextLabel"); l.Size=size; l.Position=pos or UDim2.new(0,0,0,0)
     l.BackgroundTransparency=1; l.Text=text; l.TextColor3=col or CFG.Cream
     l.TextSize=fs or 13; l.Font=bold and Enum.Font.MontserratBold or Enum.Font.Montserrat
@@ -234,7 +267,7 @@ local function makeLabel(parent,text,size,pos,fs,bold,col,ax)
     return l
 end
 
-local function makeButton(parent,text,size,pos,onClick)
+function makeButton(parent,text,size,pos,onClick)
     local b=Instance.new("TextButton"); b.Size=size; b.Position=pos or UDim2.new(0,0,0,0)
     b.BackgroundColor3=CFG.Coral; b.BackgroundTransparency=0.58; b.BorderSizePixel=0
     b.Text=text; b.TextColor3=CFG.Cream; b.TextSize=11; b.Font=Enum.Font.MontserratBold
@@ -255,7 +288,7 @@ local function makeButton(parent,text,size,pos,onClick)
     return b
 end
 
-local function makeModeBtn(parent,text,size)
+function makeModeBtn(parent,text,size)
     local b=Instance.new("TextButton"); b.Size=size; b.Position=UDim2.new(0,0,0,0)
     b.BackgroundColor3=CFG.BgCard; b.BackgroundTransparency=0.30; b.BorderSizePixel=0
     b.Text=text; b.TextColor3=CFG.CreamDim; b.TextSize=10; b.Font=Enum.Font.MontserratBold
@@ -269,14 +302,14 @@ local function makeModeBtn(parent,text,size)
     return b,s
 end
 
-local function makeSep(parent,yPos)
+function makeSep(parent,yPos)
     local s=Instance.new("Frame"); s.Size=UDim2.new(1,-16,0,1); s.Position=UDim2.new(0,8,0,yPos)
     s.BackgroundColor3=CFG.CoralDim; s.BackgroundTransparency=0.60; s.BorderSizePixel=0; s.Parent=parent
     reg(s,"BackgroundColor3","CoralDim")
 end
 
 -- Slider dalam card (absolute y)
-local function makeCardSlider(card,lbl,mn,mx,def,yOff,onChange)
+function makeCardSlider(card,lbl,mn,mx,def,yOff,onChange)
     makeLabel(card,lbl,UDim2.new(0.62,0,0,14),UDim2.new(0,8,0,yOff),10,false,CFG.CreamDim,Enum.TextXAlignment.Left)
     local vL=makeLabel(card,tostring(def),UDim2.new(0.38,-8,0,14),UDim2.new(0.62,0,0,yOff),10,true,CFG.Cream,Enum.TextXAlignment.Right)
     local trk=Instance.new("Frame"); trk.Size=UDim2.new(1,-16,0,5); trk.Position=UDim2.new(0,8,0,yOff+16)
@@ -315,12 +348,26 @@ local function makeCardSlider(card,lbl,mn,mx,def,yOff,onChange)
     return rst
 end
 
+end
 -- ══════════════════════════════════════════
 -- MAIN PANEL
 -- ══════════════════════════════════════════
-local PANEL_H=340
-local MainPanel=makeGlass(ScreenGui,UDim2.new(0,200,0,PANEL_H),UDim2.new(0.5,-100,0.5,-170),"MainPanel",UDim.new(0,18),0.60)
+do
+PANEL_H=500
+MainPanel=makeGlass(ScreenGui,UDim2.new(0,244,0,PANEL_H),UDim2.new(0.5,-122,0.5,-250),"MainPanel",UDim.new(0,18),0.60)
 MainPanel.ZIndex=10
+
+-- Responsive scaling: panel otomatis menyesuaikan ukuran layar (HP/Tablet/PC)
+local UIScale=Instance.new("UIScale"); UIScale.Parent=MainPanel
+local function updatePanelScale()
+    local vp=Camera.ViewportSize
+    local minSide=math.min(vp.X,vp.Y)
+    -- HP (layar kecil) → scale lebih kecil, Tablet/PC (layar besar) → scale normal/lebih besar
+    local scale=math.clamp(minSide/700,0.55,1.15)
+    UIScale.Scale=scale
+end
+updatePanelScale()
+Camera:GetPropertyChangedSignal("ViewportSize"):Connect(updatePanelScale)
 
 -- TITLE BAR
 local TBar=Instance.new("Frame"); TBar.Size=UDim2.new(1,0,0,44)
@@ -339,12 +386,12 @@ for i=0,2 do
     px.BorderSizePixel=0; px.ZIndex=13; px.Parent=TBar
     reg(px,"BackgroundColor3","OnCoral")
 end
-local TitleLabel=Instance.new("TextLabel"); TitleLabel.Size=UDim2.new(1,-88,1,0); TitleLabel.Position=UDim2.new(0,36,0,0)
+TitleLabel=Instance.new("TextLabel"); TitleLabel.Size=UDim2.new(1,-88,1,0); TitleLabel.Position=UDim2.new(0,36,0,0)
 TitleLabel.BackgroundTransparency=1; TitleLabel.Text="WiraPro FREECAM + Cinematic"; TitleLabel.TextColor3=CFG.OnCoral
 TitleLabel.TextSize=10; TitleLabel.Font=Enum.Font.MontserratBold; TitleLabel.TextXAlignment=Enum.TextXAlignment.Left
 TitleLabel.TextScaled=false; TitleLabel.ClipsDescendants=false; TitleLabel.ZIndex=12; TitleLabel.Parent=TBar
 reg(TitleLabel,"TextColor3","OnCoral")
-local MinBtn=Instance.new("TextButton"); MinBtn.Size=UDim2.new(0,30,0,30); MinBtn.Position=UDim2.new(1,-38,0.5,-15)
+MinBtn=Instance.new("TextButton"); MinBtn.Size=UDim2.new(0,30,0,30); MinBtn.Position=UDim2.new(1,-38,0.5,-15)
 MinBtn.BackgroundColor3=Color3.fromRGB(0,0,0); MinBtn.BackgroundTransparency=0.52; MinBtn.BorderSizePixel=0
 MinBtn.Text="−"; MinBtn.TextColor3=CFG.OnCoral; MinBtn.TextSize=15; MinBtn.Font=Enum.Font.MontserratBold
 MinBtn.AutoButtonColor=false; MinBtn.ZIndex=13; MinBtn.Parent=TBar
@@ -385,7 +432,7 @@ UserInputService.InputEnded:Connect(function(inp)
 end)
 
 -- SCROLL FRAME
-local ScrollFrame=Instance.new("ScrollingFrame")
+ScrollFrame=Instance.new("ScrollingFrame")
 ScrollFrame.Size=UDim2.new(1,0,1,-48); ScrollFrame.Position=UDim2.new(0,0,0,48)
 ScrollFrame.BackgroundTransparency=1; ScrollFrame.BorderSizePixel=0
 ScrollFrame.ScrollBarThickness=3; ScrollFrame.ScrollBarImageColor3=CFG.Coral; ScrollFrame.ScrollBarImageTransparency=0.28
@@ -399,9 +446,11 @@ local CPad=Instance.new("UIPadding")
 CPad.PaddingLeft=UDim.new(0,10); CPad.PaddingRight=UDim.new(0,10)
 CPad.PaddingTop=UDim.new(0,8); CPad.PaddingBottom=UDim.new(0,10); CPad.Parent=ScrollFrame
 
+end
 -- ══════════════════════════════════════════
 -- UI SETTINGS CARD
 -- ══════════════════════════════════════════
+do
 local uiCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,94),nil,"UISettingsCard",UDim.new(0,12),0.68)
 uiCard.BackgroundColor3=CFG.BgCard; reg(uiCard,"BackgroundColor3","BgCard")
 uiCard.LayoutOrder=10
@@ -437,7 +486,7 @@ local function uiSlider(card,lbl,mn,mx,def,yOff,fmt,onChange)
     UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dg=false end end)
 end
 
-local currentMiniW=180
+currentMiniW=180
 makeLabel(uiCard,"UI SETTINGS",UDim2.new(1,-16,0,13),UDim2.new(0,8,0,5),8,true,CFG.CoralDim,Enum.TextXAlignment.Left)
 makeSep(uiCard,20)
 uiSlider(uiCard,"Opacity",10,100,40,26,function(v) return v.."%" end,function(v)
@@ -450,28 +499,32 @@ end)
 makeSep(uiCard,58)
 uiSlider(uiCard,"Mini Width",120,300,180,62,function(v) return v.."px" end,function(v) currentMiniW=v end)
 
+end
 -- ══════════════════════════════════════════
 -- TOGGLE CARD
 -- ══════════════════════════════════════════
-local ToggleCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,52),nil,"ToggleCard",UDim.new(0,12),0.68)
+do
+ToggleCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,52),nil,"ToggleCard",UDim.new(0,12),0.68)
 ToggleCard.BackgroundColor3=CFG.BgCard; reg(ToggleCard,"BackgroundColor3","BgCard")
 ToggleCard.LayoutOrder=3
-local ToggleClick=Instance.new("TextButton"); ToggleClick.Size=UDim2.new(1,0,1,0)
+ToggleClick=Instance.new("TextButton"); ToggleClick.Size=UDim2.new(1,0,1,0)
 ToggleClick.BackgroundTransparency=1; ToggleClick.Text=""; ToggleClick.ZIndex=20; ToggleClick.Parent=ToggleCard
 local ledRing=Instance.new("Frame"); ledRing.Size=UDim2.new(0,22,0,22); ledRing.Position=UDim2.new(0,12,0.5,-11)
 ledRing.BackgroundColor3=Color3.fromRGB(0,0,0); ledRing.BackgroundTransparency=0.52; ledRing.BorderSizePixel=0; ledRing.Parent=ToggleCard
 local lrC=Instance.new("UICorner"); lrC.CornerRadius=UDim.new(1,0); lrC.Parent=ledRing
 local lrS=Instance.new("UIStroke"); lrS.Color=CFG.Coral; lrS.Thickness=1.3; lrS.Transparency=0.22; lrS.Parent=ledRing
 reg(lrS,"Color","Coral")
-local LED=Instance.new("Frame"); LED.Size=UDim2.new(0,10,0,10); LED.Position=UDim2.new(0.5,-5,0.5,-5)
+LED=Instance.new("Frame"); LED.Size=UDim2.new(0,10,0,10); LED.Position=UDim2.new(0.5,-5,0.5,-5)
 LED.BackgroundColor3=Color3.fromRGB(45,25,0); LED.BorderSizePixel=0; LED.Parent=ledRing
 local ledC=Instance.new("UICorner"); ledC.CornerRadius=UDim.new(1,0); ledC.Parent=LED
-local ToggleLbl=makeLabel(ToggleCard,"FREECAM  OFF",UDim2.new(1,-50,0,22),UDim2.new(0,44,0,7),13,true,CFG.CreamDim,Enum.TextXAlignment.Left)
-local ToggleSub=makeLabel(ToggleCard,"tap to activate",UDim2.new(1,-50,0,14),UDim2.new(0,44,0,28),9,false,CFG.CreamDim,Enum.TextXAlignment.Left)
+ToggleLbl=makeLabel(ToggleCard,"FREECAM  OFF",UDim2.new(1,-50,0,22),UDim2.new(0,44,0,7),13,true,CFG.CreamDim,Enum.TextXAlignment.Left)
+ToggleSub=makeLabel(ToggleCard,"tap to activate",UDim2.new(1,-50,0,14),UDim2.new(0,44,0,28),9,false,CFG.CreamDim,Enum.TextXAlignment.Left)
 
+end
 -- ══════════════════════════════════════════
 -- CAMERA SETTING CARD
 -- ══════════════════════════════════════════
+do
 local camCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,194),nil,"CamCard",UDim.new(0,12),0.68)
 camCard.BackgroundColor3=CFG.BgCard; reg(camCard,"BackgroundColor3","BgCard")
 camCard.LayoutOrder=1
@@ -480,10 +533,10 @@ makeLabel(camCard,"Mode",UDim2.new(0,36,0,13),UDim2.new(0,8,0,8),8,true,CFG.Cora
 local modeInner=Instance.new("Frame"); modeInner.Size=UDim2.new(1,-16,0,26); modeInner.Position=UDim2.new(0,8,0,8)
 modeInner.BackgroundTransparency=1; modeInner.Parent=camCard
 local modeL=Instance.new("UIListLayout"); modeL.FillDirection=Enum.FillDirection.Horizontal; modeL.Padding=UDim.new(0,6); modeL.Parent=modeInner
-local BtnFree,sFree=makeModeBtn(modeInner,"FREE CAM",UDim2.new(0.5,-3,1,0))
-local BtnOrbit,sOrbit=makeModeBtn(modeInner,"ORBIT",UDim2.new(0.5,-3,1,0))
+BtnFree,sFree=makeModeBtn(modeInner,"FREE CAM",UDim2.new(0.5,-3,1,0))
+BtnOrbit,sOrbit=makeModeBtn(modeInner,"ORBIT",UDim2.new(0.5,-3,1,0))
 
-local function updateModeHL()
+function updateModeHL()
     if mode=="free" then
         BtnFree.BackgroundColor3=CFG.Coral; BtnFree.BackgroundTransparency=0.30; BtnFree.TextColor3=CFG.OnCoral
         sFree.Color=CFG.CoralGlow; sFree.Transparency=0.0
@@ -499,7 +552,7 @@ end
 updateModeHL()
 
 makeSep(camCard,40)
-local resetFOV=makeCardSlider(camCard,"Field of View",CFG.MinFOV,CFG.MaxFOV,CFG.DefaultFOV,44,function(v) tgtFOV=v end)
+resetFOV=makeCardSlider(camCard,"Field of View",CFG.MinFOV,CFG.MaxFOV,CFG.DefaultFOV,44,function(v) tgtFOV=v end)
 
 makeSep(camCard,72)
 makeLabel(camCard,"Move Speed",UDim2.new(0.62,0,0,14),UDim2.new(0,8,0,76),10,false,CFG.CreamDim,Enum.TextXAlignment.Left)
@@ -536,10 +589,10 @@ spKn.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.Mouse
 spTrk.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then spDg=true; spUpd(i.Position) end end)
 UserInputService.InputChanged:Connect(function(i) if spDg and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then spUpd(i.Position) end end)
 UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then spDg=false end end)
-local resetSpeed=function() spFl.Size=UDim2.new(4/49,0,1,0); spKn.Position=UDim2.new(4/49,-7,0.5,-7); speedVL.Text="0.5"; CFG.MoveSpeed=(0.5*0.5)/5.0 end
+resetSpeed=function() spFl.Size=UDim2.new(4/49,0,1,0); spKn.Position=UDim2.new(4/49,-7,0.5,-7); speedVL.Text="0.5"; CFG.MoveSpeed=(0.5*0.5)/5.0 end
 
 makeSep(camCard,104)
-local resetTilt=makeCardSlider(camCard,"Camera Tilt",-180,180,0,108,function(v) roll=math.rad(v) end)
+resetTilt=makeCardSlider(camCard,"Camera Tilt",-180,180,0,108,function(v) roll=math.rad(v) end)
 
 makeSep(camCard,136)
 makeLabel(camCard,"Effects",UDim2.new(0,42,0,13),UDim2.new(0,8,0,141),8,true,CFG.CoralDim,Enum.TextXAlignment.Left)
@@ -549,15 +602,17 @@ local efL=Instance.new("UIListLayout"); efL.FillDirection=Enum.FillDirection.Hor
 makeButton(efRow,"Dolly",   UDim2.new(0.5,-3,1,0),nil,function() tgtFOV=CFG.DollyFOV   end)
 makeButton(efRow,"Fish Eye",UDim2.new(0.5,-3,1,0),nil,function() tgtFOV=CFG.FishEyeFOV end)
 
+end
 -- ══════════════════════════════════════════
 -- ORBIT CAM SETTING CARD
 -- ══════════════════════════════════════════
+do
 local orbitCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,232),nil,"OrbitCard",UDim.new(0,12),0.68)
 orbitCard.BackgroundColor3=CFG.BgCard; reg(orbitCard,"BackgroundColor3","BgCard")
 orbitCard.LayoutOrder=2
 
 makeLabel(orbitCard,"TARGET",UDim2.new(0,50,0,14),UDim2.new(0,8,0,8),8,true,CFG.CoralDim,Enum.TextXAlignment.Left)
-local orbitStatusLbl=makeLabel(orbitCard,"Diri sendiri",UDim2.new(1,-80,0,14),UDim2.new(0,60,0,8),9,true,CFG.CoralGlow,Enum.TextXAlignment.Left)
+orbitStatusLbl=makeLabel(orbitCard,"Diri sendiri",UDim2.new(1,-80,0,14),UDim2.new(0,60,0,8),9,true,CFG.CoralGlow,Enum.TextXAlignment.Left)
 local resetTgtBtn=Instance.new("TextButton"); resetTgtBtn.Size=UDim2.new(0,18,0,14); resetTgtBtn.Position=UDim2.new(1,-26,0,9)
 resetTgtBtn.BackgroundColor3=CFG.CoralDim; resetTgtBtn.BackgroundTransparency=0.40; resetTgtBtn.BorderSizePixel=0
 resetTgtBtn.Text="×"; resetTgtBtn.TextColor3=CFG.Cream; resetTgtBtn.TextSize=11; resetTgtBtn.Font=Enum.Font.MontserratBold
@@ -565,7 +620,7 @@ resetTgtBtn.AutoButtonColor=false; resetTgtBtn.ZIndex=15; resetTgtBtn.Parent=orb
 reg(resetTgtBtn,"BackgroundColor3","CoralDim"); reg(resetTgtBtn,"TextColor3","Cream")
 local rtC=Instance.new("UICorner"); rtC.CornerRadius=UDim.new(0,4); rtC.Parent=resetTgtBtn
 
-local InputBox=Instance.new("TextBox"); InputBox.Size=UDim2.new(1,-74,0,26); InputBox.Position=UDim2.new(0,8,0,28)
+InputBox=Instance.new("TextBox"); InputBox.Size=UDim2.new(1,-74,0,26); InputBox.Position=UDim2.new(0,8,0,28)
 InputBox.BackgroundColor3=CFG.BgBase; InputBox.BackgroundTransparency=0.28; InputBox.BorderSizePixel=0
 InputBox.Text=""; InputBox.PlaceholderText="UserId / Username..."; InputBox.PlaceholderColor3=CFG.CreamDim
 InputBox.TextColor3=CFG.Cream; InputBox.TextSize=10; InputBox.Font=Enum.Font.Montserrat
@@ -576,7 +631,7 @@ local ibS=Instance.new("UIStroke"); ibS.Color=CFG.CoralDim; ibS.Thickness=1; ibS
 reg(ibS,"Color","CoralDim")
 local ibPad=Instance.new("UIPadding"); ibPad.PaddingLeft=UDim.new(0,6); ibPad.Parent=InputBox
 local SearchBtn=makeButton(orbitCard,"CARI",UDim2.new(0,56,0,26),UDim2.new(1,-66,0,28),nil); SearchBtn.ZIndex=15
-local feedbackLbl=makeLabel(orbitCard,"",UDim2.new(1,-16,0,13),UDim2.new(0,8,0,58),8,false,CFG.CreamDim,Enum.TextXAlignment.Left)
+feedbackLbl=makeLabel(orbitCard,"",UDim2.new(1,-16,0,13),UDim2.new(0,8,0,58),8,false,CFG.CreamDim,Enum.TextXAlignment.Left)
 
 local orbitQuickBtn=makeButton(orbitCard,"◎ ORBIT",UDim2.new(1,-16,0,26),UDim2.new(0,8,0,74),function()
     if not orbitTarget then feedbackLbl.Text="⚠ Cari player dulu"; feedbackLbl.TextColor3=Color3.fromRGB(255,200,80); return end
@@ -631,11 +686,11 @@ local function miniSlider(lbl,mn,mx,def,yOff,onChange)
     UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dg=false end end)
     return rst
 end
-local resetOrbitSpd=miniSlider("Speed",  1,100,50,127,function(v) CFG.OrbitSpeed=v*0.01 end)
-local resetOrbitRad=miniSlider("Radius", 4, 50,12,161,function(v) CFG.OrbitRadius=v end)
-local resetOrbitH  =miniSlider("Height",-10,20, 4,195,function(v) CFG.OrbitHeight=v end)
+resetOrbitSpd=miniSlider("Speed",  1,100,50,127,function(v) CFG.OrbitSpeed=v*0.01 end)
+resetOrbitRad=miniSlider("Radius", 4, 50,12,161,function(v) CFG.OrbitRadius=v end)
+resetOrbitH  =miniSlider("Height",-10,20, 4,195,function(v) CFG.OrbitHeight=v end)
 
-local function resetOrbitTarget()
+function resetOrbitTarget()
     orbitTarget=nil; orbitStatusLbl.Text="Diri sendiri"
     InputBox.Text=""; feedbackLbl.Text=""; feedbackLbl.TextColor3=CFG.CreamDim
 end
@@ -663,10 +718,12 @@ end
 SearchBtn.MouseButton1Click:Connect(function() findOrbitTarget(InputBox.Text) end)
 InputBox.FocusLost:Connect(function(ep) if ep then findOrbitTarget(InputBox.Text) end end)
 
+end
 -- ══════════════════════════════════════════
 -- TELEPORT
 -- ══════════════════════════════════════════
-local function teleportToPlayer(targetPlayer)
+do
+function teleportToPlayer(targetPlayer)
     if not targetPlayer or not targetPlayer.Character then
         feedbackLbl.Text="⚠ Karakter tidak ditemukan"; feedbackLbl.TextColor3=Color3.fromRGB(255,200,80); return
     end
@@ -680,9 +737,11 @@ local function teleportToPlayer(targetPlayer)
     feedbackLbl.Text="✓ Teleport ke "..targetPlayer.Name; feedbackLbl.TextColor3=CFG.CoralGlow
 end
 
+end
 -- ══════════════════════════════════════════
 -- RESET ALL
 -- ══════════════════════════════════════════
+do
 local resetAllBtn=makeButton(ScrollFrame,"Reset All",UDim2.new(1,0,0,32),nil,function()
     resetFOV(); resetSpeed(); resetTilt()
     resetOrbitSpd(); resetOrbitRad(); resetOrbitH()
@@ -690,9 +749,11 @@ local resetAllBtn=makeButton(ScrollFrame,"Reset All",UDim2.new(1,0,0,32),nil,fun
 end)
 resetAllBtn.LayoutOrder=4
 
+end
 -- ══════════════════════════════════════════
 -- PLAYER LIST CARD
 -- ══════════════════════════════════════════
+do
 local plCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,20),nil,"PlayerListCard",UDim.new(0,12),0.68)
 plCard.BackgroundColor3=CFG.BgCard; reg(plCard,"BackgroundColor3","BgCard")
 plCard.LayoutOrder=5
@@ -789,29 +850,33 @@ for i=1,5 do
     local dC=Instance.new("UICorner"); dC.CornerRadius=UDim.new(1,0); dC.Parent=dot
 end
 
+end
 -- ══════════════════════════════════════════
 -- ESP CARD
 -- ══════════════════════════════════════════
-local espCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,52),nil,"ESPCard",UDim.new(0,12),0.68)
+do
+espCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,52),nil,"ESPCard",UDim.new(0,12),0.68)
 espCard.BackgroundColor3=CFG.BgCard; reg(espCard,"BackgroundColor3","BgCard")
 espCard.LayoutOrder=7
-local espToggleClick=Instance.new("TextButton"); espToggleClick.Size=UDim2.new(1,0,1,0)
+espToggleClick=Instance.new("TextButton"); espToggleClick.Size=UDim2.new(1,0,1,0)
 espToggleClick.BackgroundTransparency=1; espToggleClick.Text=""; espToggleClick.ZIndex=20; espToggleClick.Parent=espCard
 local espLedRing=Instance.new("Frame"); espLedRing.Size=UDim2.new(0,22,0,22); espLedRing.Position=UDim2.new(0,12,0.5,-11)
 espLedRing.BackgroundColor3=Color3.fromRGB(0,0,0); espLedRing.BackgroundTransparency=0.52; espLedRing.BorderSizePixel=0; espLedRing.Parent=espCard
 local espLrC=Instance.new("UICorner"); espLrC.CornerRadius=UDim.new(1,0); espLrC.Parent=espLedRing
 local espLrS=Instance.new("UIStroke"); espLrS.Color=CFG.Coral; espLrS.Thickness=1.3; espLrS.Transparency=0.22; espLrS.Parent=espLedRing
 reg(espLrS,"Color","Coral")
-local espLED=Instance.new("Frame"); espLED.Size=UDim2.new(0,10,0,10); espLED.Position=UDim2.new(0.5,-5,0.5,-5)
+espLED=Instance.new("Frame"); espLED.Size=UDim2.new(0,10,0,10); espLED.Position=UDim2.new(0.5,-5,0.5,-5)
 espLED.BackgroundColor3=Color3.fromRGB(45,25,0); espLED.BorderSizePixel=0; espLED.Parent=espLedRing
 local espLedC=Instance.new("UICorner"); espLedC.CornerRadius=UDim.new(1,0); espLedC.Parent=espLED
-local espToggleLbl=makeLabel(espCard,"ESP  OFF",UDim2.new(1,-50,0,22),UDim2.new(0,44,0,7),13,true,CFG.CreamDim,Enum.TextXAlignment.Left)
-local espToggleSub=makeLabel(espCard,"nama & jarak player",UDim2.new(1,-50,0,14),UDim2.new(0,44,0,28),9,false,CFG.CreamDim,Enum.TextXAlignment.Left)
+espToggleLbl=makeLabel(espCard,"ESP  OFF",UDim2.new(1,-50,0,22),UDim2.new(0,44,0,7),13,true,CFG.CreamDim,Enum.TextXAlignment.Left)
+espToggleSub=makeLabel(espCard,"nama & jarak player",UDim2.new(1,-50,0,14),UDim2.new(0,44,0,28),9,false,CFG.CreamDim,Enum.TextXAlignment.Left)
 
+end
 -- ══════════════════════════════════════════
 -- 🎬 CINEMATIC SHOTS CARD  ← NEW
 -- ══════════════════════════════════════════
-local cinH = 36 + 9*46 + 12 + 36 + 10  -- header + 9 shot btns (46px each) + gap + stop btn + padding
+do
+local cinH = 36 + 13*46 + 12 + 36 + 10  -- header + 13 shot btns (46px each) + gap + stop btn + padding
 local cinCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,cinH),nil,"CinCard",UDim.new(0,12),0.68)
 cinCard.BackgroundColor3=CFG.BgCard; reg(cinCard,"BackgroundColor3","BgCard")
 cinCard.LayoutOrder=8
@@ -829,6 +894,10 @@ local SHOT_LIST = {
     {k="RevealDown", ico="⬇", name="Reveal Down",     desc="dari kepala ke kaki"},
     {k="DollyIn",    ico="🌀", name="Dolly Zoom IN",   desc="maju · FOV sempit (vertigo)"},
     {k="DollyOut",   ico="🌀", name="Dolly Zoom OUT",  desc="mundur · FOV lebar (vertigo)"},
+    {k="ZoomRollIn", ico="🎞", name="Zoom Roll IN",    desc="roll muter + zoom in, target di tengah"},
+    {k="ZoomRollOut",ico="🎞", name="Zoom Roll OUT",   desc="roll muter + zoom out, target di tengah"},
+    {k="LowSweepRight", ico="🌊", name="Low Sweep RIGHT", desc="handheld pan kanan, goyangan organik, B-roll"},
+    {k="LowSweepLeft",  ico="🌊", name="Low Sweep LEFT",  desc="handheld pan kiri, goyangan organik, B-roll"},
 }
 
 local shotBtnY = 36
@@ -914,12 +983,14 @@ for _, sd in ipairs(SHOT_LIST) do
     shotBtnY = shotBtnY + 46
 end
 
-local BStopCin = makeButton(cinCard,"⏹  STOP SHOT",UDim2.new(1,-16,0,30),UDim2.new(0,8,0,shotBtnY+6))
+BStopCin = makeButton(cinCard,"⏹  STOP SHOT",UDim2.new(1,-16,0,30),UDim2.new(0,8,0,shotBtnY+6))
 BStopCin.BackgroundColor3 = Color3.fromRGB(60,60,80)
 
+end
 -- ══════════════════════════════════════════
 -- 📷 ARAH KAMERA CARD  ← NEW
 -- ══════════════════════════════════════════
+do
 local dirCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,80),nil,"DirCard",UDim.new(0,12),0.68)
 dirCard.BackgroundColor3=CFG.BgCard; reg(dirCard,"BackgroundColor3","BgCard")
 dirCard.LayoutOrder=81
@@ -934,7 +1005,7 @@ local dirBtnBack  = makeButton(dirCard,"◀  Belakang (Back)",UDim2.new(0.5,-6,0
 -- Cinematic settings: Radius & Height & Speed diambil dari Orbit sliders (CFG.OrbitRadius / CFG.OrbitHeight / CFG.OrbitSpeed)
 
 -- Direction button highlight logic
-local function updateDirHL()
+function updateDirHL()
     if CIN.Facing == "Front" then
         TweenService:Create(dirBtnFront,TweenInfo.new(0.12),{BackgroundTransparency=0.10}):Play()
         dirBtnFront.TextColor3 = CFG.OnCoral
@@ -956,10 +1027,12 @@ dirBtnBack.MouseButton1Click:Connect(function()
     CIN.Facing = "Back"; updateDirHL()
 end)
 
+end
 -- ══════════════════════════════════════════
 -- ◈ COLOUR THEME CARD
 -- ══════════════════════════════════════════
-local colourCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,130),nil,"ColourCard",UDim.new(0,12),0.68)
+do
+local colourCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,138),nil,"ColourCard",UDim.new(0,12),0.68)
 colourCard.BackgroundColor3=CFG.BgCard; reg(colourCard,"BackgroundColor3","BgCard")
 colourCard.LayoutOrder=9
 
@@ -969,14 +1042,14 @@ makeSep(colourCard,24)
 makeLabel(colourCard,"Pilih tema UI panel WiraPro",UDim2.new(1,-16,0,12),UDim2.new(0,8,0,29),8,false,CFG.CreamDim,Enum.TextXAlignment.Left)
 
 local swatchRow=Instance.new("Frame")
-swatchRow.Size=UDim2.new(1,-12,0,54); swatchRow.Position=UDim2.new(0,6,0,43)
-swatchRow.BackgroundTransparency=1; swatchRow.ClipsDescendants=false; swatchRow.Parent=colourCard
+swatchRow.Size=UDim2.new(1,-16,0,58); swatchRow.Position=UDim2.new(0,8,0,44)
+swatchRow.BackgroundTransparency=1; swatchRow.Parent=colourCard
 local swL=Instance.new("UIListLayout"); swL.FillDirection=Enum.FillDirection.Horizontal
-swL.Padding=UDim.new(0,3); swL.HorizontalAlignment=Enum.HorizontalAlignment.Center
+swL.Padding=UDim.new(0,5); swL.HorizontalAlignment=Enum.HorizontalAlignment.Center
 swL.VerticalAlignment=Enum.VerticalAlignment.Center; swL.Parent=swatchRow
 
 local previewBar=Instance.new("Frame")
-previewBar.Size=UDim2.new(1,-16,0,16); previewBar.Position=UDim2.new(0,8,0,103)
+previewBar.Size=UDim2.new(1,-16,0,20); previewBar.Position=UDim2.new(0,8,0,108)
 previewBar.BackgroundTransparency=1; previewBar.Parent=colourCard
 local pvL=Instance.new("UIListLayout"); pvL.FillDirection=Enum.FillDirection.Horizontal
 pvL.Padding=UDim.new(0,3); pvL.Parent=previewBar
@@ -1003,27 +1076,27 @@ for _,theme in ipairs(THEMES) do
     local isActive=(activeThemeId==theme.id)
 
     local btn=Instance.new("TextButton")
-    btn.Size=UDim2.new(0,32,0,50); btn.BackgroundColor3=theme.BgCard
+    btn.Size=UDim2.new(0,38,0,56); btn.BackgroundColor3=theme.BgCard
     btn.BackgroundTransparency=isActive and 0.05 or 0.25; btn.BorderSizePixel=0
     btn.Text=""; btn.AutoButtonColor=false; btn.ZIndex=20; btn.Parent=swatchRow
-    local bC=Instance.new("UICorner"); bC.CornerRadius=UDim.new(0,8); bC.Parent=btn
+    local bC=Instance.new("UICorner"); bC.CornerRadius=UDim.new(0,9); bC.Parent=btn
     local bS=Instance.new("UIStroke"); bS.Thickness=isActive and 1.8 or 1.0
     bS.Color=isActive and theme.Coral or theme.CoralDim
     bS.Transparency=isActive and 0.0 or 0.55; bS.Parent=btn
 
-    local sw=Instance.new("Frame"); sw.Size=UDim2.new(0,18,0,18); sw.Position=UDim2.new(0.5,-9,0,7)
+    local sw=Instance.new("Frame"); sw.Size=UDim2.new(0,22,0,22); sw.Position=UDim2.new(0.5,-11,0,8)
     sw.BackgroundColor3=theme.swatch; sw.BorderSizePixel=0; sw.Parent=btn
     local swC=Instance.new("UICorner"); swC.CornerRadius=UDim.new(1,0); swC.Parent=sw
     local swSh=Instance.new("Frame"); swSh.Size=UDim2.new(0.5,0,0,3); swSh.Position=UDim2.new(0.15,0,0,2)
     swSh.BackgroundColor3=Color3.fromRGB(255,255,255); swSh.BackgroundTransparency=0.45; swSh.BorderSizePixel=0; swSh.Parent=sw
     local swShC=Instance.new("UICorner"); swShC.CornerRadius=UDim.new(1,0); swShC.Parent=swSh
 
-    local nLbl=Instance.new("TextLabel"); nLbl.Size=UDim2.new(1,0,0,12); nLbl.Position=UDim2.new(0,0,1,-13)
+    local nLbl=Instance.new("TextLabel"); nLbl.Size=UDim2.new(1,0,0,13); nLbl.Position=UDim2.new(0,0,1,-15)
     nLbl.BackgroundTransparency=1; nLbl.Text=theme.name; nLbl.TextColor3=theme.CreamDim
-    nLbl.TextSize=6; nLbl.Font=Enum.Font.MontserratBold; nLbl.TextXAlignment=Enum.TextXAlignment.Center
+    nLbl.TextSize=7; nLbl.Font=Enum.Font.MontserratBold; nLbl.TextXAlignment=Enum.TextXAlignment.Center
     nLbl.Parent=btn
 
-    local adot=Instance.new("Frame"); adot.Size=UDim2.new(0,4,0,4); adot.Position=UDim2.new(0.5,-2,0,1)
+    local adot=Instance.new("Frame"); adot.Size=UDim2.new(0,5,0,5); adot.Position=UDim2.new(0.5,-2.5,0,1)
     adot.BackgroundColor3=theme.Coral; adot.BorderSizePixel=0
     adot.BackgroundTransparency=isActive and 0.0 or 1.0; adot.Parent=btn
     local adC=Instance.new("UICorner"); adC.CornerRadius=UDim.new(1,0); adC.Parent=adot
@@ -1063,9 +1136,11 @@ end
 
 buildPreviewBar(THEMES[1])
 
+end
 -- ══════════════════════════════════════════
 -- ⚠ UNLOAD SCRIPT CARD  (paling bawah)
 -- ══════════════════════════════════════════
+do
 local unloadCard=makeGlass(ScrollFrame,UDim2.new(1,0,0,80),nil,"UnloadCard",UDim.new(0,12),0.68)
 unloadCard.BackgroundColor3=Color3.fromRGB(35,10,10)
 unloadCard.LayoutOrder=999
@@ -1189,25 +1264,29 @@ unloadBtn.MouseButton1Click:Connect(function()
     print("✦ WiraPro FREECAM — Script unloaded. Semua GUI dihapus.")
 end)
 
+end
 -- ══════════════════════════════════════════
 -- HIDE / SHOW GUIs
 -- ══════════════════════════════════════════
+do
 local hiddenGuis={}
-local function hideOthers()
+function hideOthers()
     for _,g in ipairs(PlayerGui:GetChildren()) do
         if g:IsA("ScreenGui") and g.Name~="WiraProFreecam" and g.Enabled then
             g.Enabled=false; table.insert(hiddenGuis,g)
         end
     end
 end
-local function showOthers()
+function showOthers()
     for _,g in ipairs(hiddenGuis) do if g and g.Parent then g.Enabled=true end end
     hiddenGuis={}
 end
 
+end
 -- ══════════════════════════════════════════
 -- CINEMATIC SHOT FUNCTIONS  ← NEW
 -- ══════════════════════════════════════════
+do
 local function CinGetRoot()
     local t = orbitTarget or Player
     local ch = t.Character; if not ch then return nil end
@@ -1394,85 +1473,141 @@ local function RunRevealDown()
     end)
 end
 
--- Dolly Zoom IN — kamera maju (mundur jauh → dekat), FOV melebar secara bersamaan
--- Efek vertigo: subject tetap sama besar di layar, background terasa "menghantam maju"
+-- Dolly Zoom IN — kamera maju, FOV melebar → background "menghantam" (vertigo)
+-- FIX: interpolasi FOV langsung (bukan radius), radius dihitung dari K agar
+--      ukuran subject di layar benar-benar konstan sepanjang shot.
 local function RunDollyIn()
-    local root = CinGetRoot(); if not root then return end
     local dur     = CinD(8)
-
-    -- FOV: mulai sempit (zoomed in jauh), akhir lebar (normal)
-    local fovStart = 15
-    local fovEnd   = math.clamp(tgtFOV, 40, 100)
-
-    -- Kunci arah offset di awal shot agar kamera tidak goyang mengikuti rotasi root
-    local fwd = root.CFrame.LookVector
-    local dirOffset = (CIN.Facing == "Front") and (-fwd) or (fwd)
-
-    -- K: konstanta dolly zoom agar apparent size subject konstan
-    -- Hitung dari titik AKHIR (dekat, FOV lebar) supaya posisi awal = jauh
-    local rEnd = math.max(CFG.OrbitRadius * 0.6, 2.0)
+    local fovEnd  = math.clamp(tgtFOV, 35, 90)
+    local fovStart = 16          -- super-narrow: kamera sangat zoomed-in di awal
+    -- K = rEnd * tan(fovEnd/2) → subject apparent size tetap konstan
+    local rEnd = math.max(CFG.OrbitRadius * 0.75, 2.5)
     local K    = rEnd * math.tan(math.rad(fovEnd) / 2)
-
-    -- Posisi look target dikunci di awal (kepala subject)
-    local lookOffset = Vector3.new(0, 1.5, 0)
-
-    local t0 = tick()
+    local t0   = tick()
     CIN.Conn = RunService.RenderStepped:Connect(function()
         if not CIN.Playing then return end
-        local r = CinGetRoot(); if not r then return end
-        local t = math.clamp((tick() - t0) / dur, 0, 1)
-        local e = CinEIS(t)
-
-        -- FOV naik dari sempit → lebar
+        local root = CinGetRoot(); if not root then return end
+        local t   = math.clamp((tick() - t0) / dur, 0, 1)
+        local e   = CinEIS(t)
+        -- ✔ FOV diinterpolasi → perubahan zoom merata di seluruh durasi
         local fov = fovStart + (fovEnd - fovStart) * e
-        -- Radius turun dari jauh → dekat (K konstan → subject tetap sama besar)
+        -- ✔ Radius dihitung dari K agar ukuran subject konstan di layar
         local rad = K / math.tan(math.rad(fov) / 2)
-
-        local lookPt  = r.Position + lookOffset
-        local camPos3 = lookPt + dirOffset * rad + Vector3.new(0, CFG.OrbitHeight * 0.3, 0)
-        Camera.CFrame      = CFrame.lookAt(camPos3, lookPt)
+        -- ✔ Look target di head-level tetap (tidak ikut OrbitHeight)
+        local lookPt = root.Position + Vector3.new(0, 1.5, 0)
+        Camera.CFrame      = CFrame.lookAt(lookPt + CinCO(rad) + Vector3.new(0, CFG.OrbitHeight * 0.35, 0), lookPt)
         Camera.FieldOfView = math.clamp(fov, 10, 120)
         if t >= 1 then Camera.FieldOfView = fovEnd; CinStopShot() end
     end)
 end
 
--- Dolly Zoom OUT — kamera mundur (dekat → jauh), FOV menyempit secara bersamaan
--- Efek vertigo: subject tetap sama besar di layar, background terasa "ditarik mundur"
+-- Dolly Zoom OUT — kamera mundur, FOV menyempit → background "kabur menjauh" (vertigo)
 local function RunDollyOut()
-    local root = CinGetRoot(); if not root then return end
-    local dur = CinD(8)
-
-    -- FOV: mulai lebar (normal), akhir sempit (zoomed in jauh)
-    local fovStart = math.clamp(tgtFOV, 40, 100)
-    local fovEnd   = 15
-
-    -- Kunci arah offset di awal shot
-    local fwd = root.CFrame.LookVector
-    local dirOffset = (CIN.Facing == "Front") and (-fwd) or (fwd)
-
-    -- K dihitung dari titik AWAL (dekat, FOV lebar)
-    local rStart = math.max(CFG.OrbitRadius * 0.6, 2.0)
-    local K      = rStart * math.tan(math.rad(fovStart) / 2)
-
-    local lookOffset = Vector3.new(0, 1.5, 0)
-
-    local t0 = tick()
+    local dur      = CinD(8)
+    local fovStart = math.clamp(tgtFOV, 35, 90)
+    local fovEnd   = 16          -- super-narrow: kamera sangat zoomed-in di akhir
+    local rStart   = math.max(CFG.OrbitRadius * 0.75, 2.5)
+    local K        = rStart * math.tan(math.rad(fovStart) / 2)
+    local t0       = tick()
     CIN.Conn = RunService.RenderStepped:Connect(function()
         if not CIN.Playing then return end
-        local r = CinGetRoot(); if not r then return end
-        local t = math.clamp((tick() - t0) / dur, 0, 1)
-        local e = CinEIS(t)
-
-        -- FOV turun dari lebar → sempit
+        local root = CinGetRoot(); if not root then return end
+        local t   = math.clamp((tick() - t0) / dur, 0, 1)
+        local e   = CinEIS(t)
         local fov = fovStart + (fovEnd - fovStart) * e
-        -- Radius naik dari dekat → jauh (K konstan → subject tetap sama besar)
         local rad = K / math.tan(math.rad(fov) / 2)
-
-        local lookPt  = r.Position + lookOffset
-        local camPos3 = lookPt + dirOffset * rad + Vector3.new(0, CFG.OrbitHeight * 0.3, 0)
-        Camera.CFrame      = CFrame.lookAt(camPos3, lookPt)
+        local lookPt = root.Position + Vector3.new(0, 1.5, 0)
+        Camera.CFrame      = CFrame.lookAt(lookPt + CinCO(rad) + Vector3.new(0, CFG.OrbitHeight * 0.35, 0), lookPt)
         Camera.FieldOfView = math.clamp(fov, 10, 120)
         if t >= 1 then Camera.FieldOfView = fovEnd; CinStopShot() end
+    end)
+end
+
+-- Zoom Roll IN — kamera roll (berputar pada sumbu pandang) sambil zoom in,
+-- target tetap persis di tengah layar sepanjang shot.
+local function RunZoomRollIn()
+    local t0,dur=tick(),CinD(6)
+    local rollTurns = 1   -- jumlah putaran penuh selama shot (360° x rollTurns)
+    CIN.Conn=RunService.RenderStepped:Connect(function()
+        if not CIN.Playing then return end
+        local root=CinGetRoot(); if not root then return end
+        local t=math.clamp((tick()-t0)/dur,0,1); local e=CinEIS(t)
+        -- Radius mengecil (zoom in) dari jauh → dekat
+        local rad=CFG.OrbitRadius*2.2+(CFG.OrbitRadius*0.6-CFG.OrbitRadius*2.2)*e
+        local lookPt=CinLK()
+        -- Posisi kamera tetap statis di depan/belakang target (tanpa orbit horizontal)
+        local camPos3=lookPt+CinCO(rad)+Vector3.new(0,CFG.OrbitHeight*0.30,0)
+        -- Roll: rotasi murni pada sumbu pandang kamera (Z lokal) → target tetap di tengah
+        local rollAng=math.rad(360*rollTurns)*e
+        local baseCF=CFrame.lookAt(camPos3,lookPt)
+        Camera.CFrame=baseCF*CFrame.Angles(0,0,rollAng)
+        Camera.FieldOfView=tgtFOV; if t>=1 then CinStopShot() end
+    end)
+end
+
+-- Zoom Roll OUT — kamera roll (berputar pada sumbu pandang) sambil zoom out,
+-- target tetap persis di tengah layar sepanjang shot.
+local function RunZoomRollOut()
+    local t0,dur=tick(),CinD(6)
+    local rollTurns = 1
+    CIN.Conn=RunService.RenderStepped:Connect(function()
+        if not CIN.Playing then return end
+        local root=CinGetRoot(); if not root then return end
+        local t=math.clamp((tick()-t0)/dur,0,1); local e=CinEIS(t)
+        -- Radius membesar (zoom out) dari dekat → jauh
+        local rad=CFG.OrbitRadius*0.6+(CFG.OrbitRadius*2.2-CFG.OrbitRadius*0.6)*e
+        local lookPt=CinLK()
+        local camPos3=lookPt+CinCO(rad)+Vector3.new(0,CFG.OrbitHeight*0.30,0)
+        local rollAng=math.rad(360*rollTurns)*e
+        local baseCF=CFrame.lookAt(camPos3,lookPt)
+        Camera.CFrame=baseCF*CFrame.Angles(0,0,rollAng)
+        Camera.FieldOfView=tgtFOV; if t>=1 then CinStopShot() end
+    end)
+end
+
+-- Low Sweep — handheld cinematic pan ke kanan/kiri, sangat lembut & organik.
+-- Bukan stabilisasi mekanis: pakai Perlin noise berlapis (bukan sine murni)
+-- untuk goyangan vertikal & rotasi mikro, terasa seperti B-roll dokumenter.
+-- Disertai tilt turun perlahan sepanjang shot, satu take kontinu tanpa cut.
+local function RunLowSweepDir(dirSign)
+    local dur      = CinD(12)             -- durasi panjang = satu take tenang & emosional
+    local angStart = 0
+    local angEnd   = math.rad(32) * dirSign -- pan kamera perlahan ke kanan (+1) / kiri (-1)
+    local tiltEnd  = math.rad(-18)        -- tilt turun yang jelas terlihat, progresif
+    local baseH    = math.min(CFG.OrbitHeight * 0.18, 1.5) -- rendah, hampir sejajar tanah
+    local seed     = math.random() * 1000 -- seed acak → goyangan tidak pernah berulang sama
+    local t0       = tick()
+    CIN.Conn = RunService.RenderStepped:Connect(function()
+        if not CIN.Playing then return end
+        local root = CinGetRoot(); if not root then return end
+        local now = tick()
+        local t   = math.clamp((now - t0) / dur, 0, 1)
+        local e   = CinEIS(t)  -- ease in-out → pan & tilt tetap halus, tidak tersentak
+
+        local ang  = angStart + (angEnd - angStart) * e
+        local tilt = tiltEnd * e
+
+        local lookPt = CinLK()
+        local rad    = CFG.OrbitRadius * 1.1
+        local baseDir = CinCO(rad).Unit  -- arah dasar (depan/belakang target)
+        -- Rotasi arah dasar ke kanan/kiri secara perlahan (pan)
+        local rotated = CFrame.Angles(0, ang, 0):VectorToWorldSpace(baseDir)
+        local camBase = lookPt + rotated * rad + Vector3.new(0, baseH, 0)
+
+        -- Goyangan handheld organik: Perlin noise berlapis, amplitudo sangat lembut
+        local jx = math.noise(now * 0.55, seed)        * 0.12
+        local jy = math.noise(now * 0.85, seed + 50)   * 0.10  -- goyangan vertikal lembut
+        local jz = math.noise(now * 0.45, seed + 100)  * 0.08
+        local camPos = camBase + Vector3.new(jx, jy, jz)
+
+        -- Micro-rotasi handheld (pitch/roll halus) + tilt turun progresif
+        local jPitch = tilt + math.noise(now * 0.70, seed + 200) * 0.018
+        local jRoll  = math.noise(now * 0.40, seed + 300) * 0.014
+
+        local baseCF = CFrame.lookAt(camPos, lookPt)
+        Camera.CFrame      = baseCF * CFrame.Angles(jPitch, 0, jRoll)
+        Camera.FieldOfView = tgtFOV
+        if t >= 1 then CinStopShot() end
     end)
 end
 
@@ -1486,13 +1621,19 @@ ShotFns.Reveal     = RunReveal
 ShotFns.RevealDown = RunRevealDown
 ShotFns.DollyIn    = RunDollyIn
 ShotFns.DollyOut   = RunDollyOut
+ShotFns.ZoomRollIn  = RunZoomRollIn
+ShotFns.ZoomRollOut = RunZoomRollOut
+ShotFns.LowSweepRight = function() RunLowSweepDir(1) end
+ShotFns.LowSweepLeft  = function() RunLowSweepDir(-1) end
 
 -- Connect shot buttons (click sudah di-wire langsung di build loop di atas)
 BStopCin.MouseButton1Click:Connect(CinStopShot)
 
+end
 -- ══════════════════════════════════════════
 -- FREECAM ENABLE / DISABLE
 -- ══════════════════════════════════════════
+do
 local function enableFreecam()
     freecamActive=true; savedCamType=Camera.CameraType; savedFOV=Camera.FieldOfView
     Camera.CameraType=Enum.CameraType.Scriptable
@@ -1518,7 +1659,7 @@ local function enableFreecam()
     TweenService:Create(ToggleCard,TweenInfo.new(0.18),{BackgroundColor3=Color3.fromRGB(30,15,0)}):Play()
 end
 
-local function disableFreecam()
+function disableFreecam()
     -- Stop any playing cinematic shot first
     if CIN.Playing then CinStopShot() end
     freecamActive=false; Camera.CameraType=savedCamType or Enum.CameraType.Custom; Camera.FieldOfView=savedFOV
@@ -1562,7 +1703,7 @@ MinBtn.MouseButton1Click:Connect(function()
     isMinimized=not isMinimized
     if isMinimized then
         ScrollFrame.Visible=false
-        local ratio=currentMiniW/200
+        local ratio=currentMiniW/244
         local miniTextSize=math.max(7,math.floor(11*ratio))
         local miniBtnSize=math.max(20,math.floor(26*ratio))
         TweenService:Create(MinBtn,TweenInfo.new(0.18),{Size=UDim2.new(0,miniBtnSize,0,miniBtnSize),Position=UDim2.new(1,-(miniBtnSize+6),0.5,-miniBtnSize/2),TextSize=math.max(9,math.floor(13*ratio))}):Play()
@@ -1574,7 +1715,7 @@ MinBtn.MouseButton1Click:Connect(function()
         TweenService:Create(MinBtn,TweenInfo.new(0.20),{Size=UDim2.new(0,30,0,30),Position=UDim2.new(1,-38,0.5,-15),TextSize=15}):Play()
         TitleLabel.Size=UDim2.new(1,-88,1,0); TitleLabel.TextSize=10
         TitleLabel.TextScaled=false; TitleLabel.TextXAlignment=Enum.TextXAlignment.Left
-        TweenService:Create(MainPanel,TweenInfo.new(0.28,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{Size=UDim2.new(0,200,0,PANEL_H)}):Play()
+        TweenService:Create(MainPanel,TweenInfo.new(0.28,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{Size=UDim2.new(0,244,0,PANEL_H)}):Play()
         task.delay(0.20,function() ScrollFrame.Visible=true end)
         MinBtn.Text="−"
     end
@@ -1636,9 +1777,11 @@ UserInputService.TouchEnded:Connect(function(t,gpe)
     if t==rightId then rightActive=false; rightId=nil end
 end)
 
+end
 -- ══════════════════════════════════════════
 -- ESP LOGIC
 -- ══════════════════════════════════════════
+do
 local EspGui=Instance.new("ScreenGui")
 EspGui.Name="WiraProESP"; EspGui.ResetOnSpawn=false
 EspGui.DisplayOrder=1000; EspGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
@@ -1727,9 +1870,11 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+end
 -- ══════════════════════════════════════════
 -- RENDER LOOP (Freecam + Cinematic guard)
 -- ══════════════════════════════════════════
+do
 RunService.RenderStepped:Connect(function(dt)
     if not freecamActive then return end
     curFOV=curFOV+(tgtFOV-curFOV)*0.1*(dt*60)
@@ -1785,7 +1930,7 @@ end)
 
 task.spawn(function()
     task.wait(0.1)
-    print("✦ WiraPro FREECAM V3.8 + Cinematic Edition — Ready")
+    print("✦ WiraPro FREECAM V3.9 + Cinematic Edition — Ready")
     print("  FREE     : WASD+Q/E gerak | RMB rotate")
     print("  ORBIT    : Isi UserId/Username → CARI → ORBIT")
     print("  CINEMATIC: Scroll ke '🎬 CINEMATIC SHOTS' → pilih shot → play")
@@ -1795,3 +1940,4 @@ task.spawn(function()
     print("  THEME    : Scroll bawah → COLOUR THEME → 5 tema")
     print("  UNLOAD   : Scroll paling bawah → UNLOAD SCRIPT → klik 2x")
 end)
+end
